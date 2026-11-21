@@ -2,12 +2,12 @@ plugins {
     id 'com.android.application'
 }
 
-// Firma de producción opcional; los secretos SOLO se leen del entorno de GitHub Actions.
+// Firma estable: cuatro variables de entorno leídas en el ejecutor. Nunca en Git.
 def storePath = System.getenv('ACTAREC_STORE_FILE')
-def storePasswordEnv = System.getenv('ACTAREC_STORE_PASSWORD')
-def keyAliasEnv = System.getenv('ACTAREC_KEY_ALIAS')
-def keyPasswordEnv = System.getenv('ACTAREC_KEY_PASSWORD')
-def signed = [storePath,storePasswordEnv,keyAliasEnv,keyPasswordEnv].every { it != null && !it.isEmpty() }
+def storePass = System.getenv('ACTAREC_STORE_PASSWORD')
+def aliasValue = System.getenv('ACTAREC_KEY_ALIAS')
+def keyPass = System.getenv('ACTAREC_KEY_PASSWORD')
+def canSign = [storePath,storePass,aliasValue,keyPass].every { it != null && !it.trim().isEmpty() }
 
 android {
     namespace 'es.actarec.app'
@@ -17,30 +17,40 @@ android {
         applicationId 'es.actarec.app'
         minSdk 29
         targetSdk 35
-        versionCode = Integer.parseInt((project.findProperty('actarecVersionCode') ?: '3000').toString())
-        versionName = (project.findProperty('actarecVersionName') ?: '0.3.0-preview').toString()
+        versionCode Integer.parseInt((project.findProperty('actarecVersionCode') ?: '1000001').toString())
+        versionName (project.findProperty('actarecVersionName') ?: '1.0.0').toString()
     }
+
     signingConfigs {
-        if (signed) {
-            create('actarecRelease') {
-                storeFile file(storePath)
-                storePassword storePasswordEnv
-                keyAlias keyAliasEnv
-                keyPassword keyPasswordEnv
+        if (canSign) {
+            production {
+                storeFile = file(storePath)
+                storePassword = storePass
+                keyAlias = aliasValue
+                keyPassword = keyPass
             }
         }
     }
+
     buildTypes {
         debug {
+            applicationIdSuffix '.preview'
+            versionNameSuffix '-debug'
             debuggable true
         }
         release {
+            debuggable false
             minifyEnabled false
-            if (signed) { signingConfig = signingConfigs.actarecRelease }
+            if (canSign) signingConfig = signingConfigs.production
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+    lint {
+        abortOnError true
+        checkReleaseBuilds true
     }
 }

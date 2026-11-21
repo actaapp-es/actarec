@@ -1,76 +1,75 @@
-# Actarec
+<p align="center"><strong>ACTAREC</strong></p>
+<h1 align="center">Actarec</h1>
+<p align="center">Graba. Transcribe. Recuerda.</p>
+<p align="center">Grabadora de reuniones Android con Groq AI, biblioteca privada y controles mientras usas otras apps.</p>
 
-**Grabaciones Android con memoria.** Graba conversaciones presenciales en segundo plano, transcribe el audio con Groq, genera resúmenes y haz preguntas sobre cada conversación. Proyecto abierto, sin servidor ni cuenta propia.
-
-> **Estado:** versión de prueba (0.3.0). Publicamos el código y ofrecemos compilación automática. Hasta que pase una compilación real y pruebas en varios Android, no se puede garantizar un funcionamiento perfecto.
-
-## Descargar APK
-
-Cuando GitHub Actions haya terminado correctamente, descarga **Actarec-preview.apk** desde [Releases](https://github.com/actaapp-es/actarec/releases/tag/preview). El nombre del archivo es constante. También se genera un `SHA256SUMS.txt` de verificación.
-
-Si la pestaña *Releases* no muestra la APK, mira [Actions](https://github.com/actaapp-es/actarec/actions) para ver el fallo. **Una publicación correcta de GitHub Pages no equivale a la compilación de la APK.**
+<p align="center"><a href="https://github.com/actaapp-es/actarec/releases">📥 APK de Actarec</a> · <a href="PRIVACIDAD.md">Privacidad</a> · <a href="docs/FIRMA.md">Firma y publicación</a></p>
 
 ## Funciones
 
-- Grabación de **micrófono** con `ForegroundService`: continúa cuando usas otras apps, salvo restricciones de Android/fabricante.
-- Notificación persistente para pausar, reanudar y detener.
-- Cápsula flotante opcional bajo el notch, con permiso de superposición y en móviles compatibles; nunca ocupa la zona reservada del sistema.
-- Biblioteca privada, reproducción, renombrado, borrado e importación de audio.
-- Groq `whisper-large-v3-turbo` para transcripción y `openai/gpt-oss-120b` para resumen y preguntas.
-- Grabaciones largas AAC/M4A troceadas localmente para subir a Groq por partes.
-- Clave de Groq **personal** guardada cifrada con Android Keystore. No contiene claves de otros usuarios ni requiere servidor.
+- **Grabación en segundo plano** con `ForegroundService` de micrófono y controles de **pausa, reanudación y guardar** desde una notificación persistente.
+- **Cápsula flotante opcional** situada **debajo de la barra de estado** en móviles con notch/recorte. Android no permite insertar controles propios dentro del notch de forma universal. Requiere permiso de superposición; en el resto de móviles se usan notificaciones.
+- Grabaciones privadas en almacenamiento interno de la app, **búsqueda, favoritos**, importación de M4A/MP3/WAV/OGG/FLAC/WebM/MP4 y reproducción con desplazamiento.
+- **Transcripción con Groq** (`whisper-large-v3-turbo`), detección automática de idioma o español/inglés, división de archivos largos AAC/M4A.
+- **Resumen y tareas con Groq** (`openai/gpt-oss-120b`) y **preguntas contextualizadas** sobre una conversación. Permite editar la transcripción.
+- **Compartir** texto o audio usando permisos temporales de Android; eliminar audios y análisis locales.
+- Clave Groq del usuario cifrada con Android Keystore. El audio solo se envía a Groq cuando el usuario lo autoriza.
+- Interfaz nativa Android con la paleta forestal/marfil de Acta, sin SDK analítico, publicidad ni bibliotecas de diseño externas.
 
-**Limitaciones:** No graba el audio interno de llamadas. La cápsula no es la Dynamic Island real del sistema. Android restringe inicio del micrófono desde el fondo: hay que comenzar desde la pantalla visible de Actarec. No se garantiza supervivencia si el fabricante fuerza el cierre del servicio. Los audios y la base de datos se almacenan localmente pero la app **no cifra los archivos de audio por sí misma**. Para usar IA se envía audio/transcripción a Groq con consentimiento.
+> **Qué no hace:** no captura audio interno de llamadas telefónicas; no modifica la barra del sistema ni garantiza soporte de Live Updates/Islas de todos los fabricantes. La grabación requiere permisos y depende de las políticas de batería de cada móvil.
 
-## Compilación en GitHub (automática)
+## Instalación pública
 
-Al hacer `push` en `main`, `.github/workflows/android.yml`:
-1. Instala Java 17, Gradle 8.11.1 y Android SDK 35, sin `android-actions/setup-android@v3`.
-2. Compila una APK instalable (`assembleDebug` si no hay clave de firma, `assembleRelease` si la hay).
-3. Sube el artefacto de compilación a Actions.
-4. Crea/actualiza la release pública **preview** con `Actarec-preview.apk` y SHA-256.
+En [Releases](https://github.com/actaapp-es/actarec/releases), descarga una APK de etiqueta estable (`v1.0.0`, etc.) **únicamente cuando aparezca como firmada de producción**. En la app, concede acceso al micrófono, habilita notificaciones y configura tu clave de Groq en Ajustes. Puedes crear una clave personal en https://console.groq.com/keys.
 
-Una etiqueta `vX.Y.Z` crea una release de esa versión. Si los secretos de firma no están configurados, la release se marca como **experimental** (debug) y **no debe presentarse como estable**.
+La release `preview` se genera desde `main`, usa un **identificador independiente** (`es.actarec.app.preview`) y una firma de depuración; es para pruebas, no sustituye a una release estable.
 
-### Muy importante al actualizar un repositorio existente
+## Publicar la versión definitiva (mantenedores)
 
-**No subas solo estos archivos encima de los anteriores desde la web**, porque GitHub no elimina automáticamente los archivos antiguos. Debes borrar `.github/workflows/release.yml`, `tools/bootstrap/`, `gradle/wrapper/` y los antiguos `gradlew*` del repositorio previo. Esos elementos ya no forman parte del proyecto nuevo.
+El código fuente permite producir una APK release. **No se puede publicar una versión definitiva firmada sin que el propietario aporte una clave de firma privada persistente**. No guardes esa clave en Git.
 
-La forma más segura es clonar el repositorio en un PC y reemplazar por completo su contenido, conservando solo `.git`:
+1. Añade los cuatro secretos de GitHub Actions siguiendo [docs/FIRMA.md](docs/FIRMA.md): `ACTAREC_KEYSTORE_BASE64`, `ACTAREC_STORE_PASSWORD`, `ACTAREC_KEY_ALIAS`, `ACTAREC_KEY_PASSWORD`.
+2. Sube el contenido de este proyecto a `main`, manteniendo `.github/workflows/android.yml` (el único workflow del repositorio).
+3. Espera a que `Android · Actarec` termine correctamente. En `main` se genera automáticamente `Actarec-preview.apk`.
+4. **Tras probar el comportamiento real en Android**, crea la etiqueta anotada `v1.0.0` y súbela. GitHub Actions compilará `:app:assembleRelease`, verificará la APK con `apksigner` y publicará `Actarec-v1.0.0.apk` con su SHA-256 en Releases.
 
-```bash
-git clone https://github.com/actaapp-es/actarec.git
-cd actarec
-# Copia aquí los archivos extraídos de ESTE ZIP; borra los archivos viejos que no figuran en él.
-git add -A
-git commit -m "Reconstruir compilación Android con flujo único"
-git push origin main
-```
-
-En **Settings → Actions → General**, asegúrate de permitir el uso de GitHub Actions y de que el token pueda crear Releases (permiso `contents: write` indicado en el YAML, sujeto a los ajustes del repositorio).
+Si faltan secretos al publicar una etiqueta, el workflow **fallará expresamente**; nunca presentará una APK debug como si fuera una versión definitiva.
 
 ## Compilar localmente
 
-Requiere Android SDK 35, Java 17 y **Gradle 8.11.1** instalados. Desde la raíz:
+Requisitos: **JDK 17**, **Gradle 8.11.1** y **Android SDK 35** con build-tools 35.0.0. Este repositorio no incluye un Gradle Wrapper artesanal ni claves privadas.
 
-```bash
-gradle --no-daemon :app:assembleDebug
-# APK: app/build/outputs/apk/debug/app-debug.apk
+```sh
+python3 scripts/verify.py
+gradle --no-daemon :app:lintDebug :app:assembleDebug
+# -> app/build/outputs/apk/debug/app-debug.apk
 ```
 
-No se distribuye un Gradle Wrapper no oficial. Si necesitas wrapper para desarrollo local, genéralo mediante Gradle oficial: `gradle wrapper --gradle-version 8.11.1`, y sube el wrapper estándar resultante.
+Para compilar una release firmada, define las cuatro variables `ACTAREC_STORE_FILE`, `ACTAREC_STORE_PASSWORD`, `ACTAREC_KEY_ALIAS`, `ACTAREC_KEY_PASSWORD` en tu entorno y ejecuta `gradle --no-daemon :app:assembleRelease`. Nunca compartas la clave de firma ni la subas al repositorio.
 
-## Firma estable (opcional)
+## Pruebas
 
-Para que las actualizaciones se instalen encima sin desinstalar se necesita una **misma clave privada** de firma para todas las versiones. Configura en GitHub > Settings > Secrets and variables > Actions estos 4 secretos:
+- `python3 scripts/verify.py`: integridad XML, manifiesto, recursos, secretos y workflow.
+- Tests de lógica Java incluidos en `tests/`; GitHub Actions los compila y ejecuta automáticamente.
+- GitHub Actions ejecuta Android Lint, compila la APK y verifica la firma con `apksigner`.
+- La [matriz de pruebas manuales](docs/PRUEBAS.md) debe completarse en dispositivos reales antes de anunciar una versión estable.
 
-- `ACTAREC_KEYSTORE_BASE64` — el archivo `.jks` codificado como Base64.
-- `ACTAREC_STORE_PASSWORD` — contraseña del almacén.
-- `ACTAREC_KEY_ALIAS` — alias de firma.
-- `ACTAREC_KEY_PASSWORD` — contraseña de esa clave.
+**Estado de esta entrega:** el código y las pruebas estáticas se han revisado, pero desde el entorno donde se generó este ZIP no se dispone de Android SDK, Groq API key ni dispositivo físico. No se afirma que se haya compilado o instalado una APK de producción ni que se haya probado en todos los Android. La primera compilación real debe confirmarse en GitHub Actions.
 
-Nunca incluyas el keystore ni las contraseñas en el repositorio público. Guarda copias seguras de la clave: perderla impediría actualizar sobre instalaciones previas.
+## Estructura
 
-## Privacidad y licencia
+```text
+.github/workflows/android.yml   CI / releases firmadas
+app/src/main/java/...           Código Java Android
+app/src/main/res/               Tema, iconos, colores
+scripts/verify.py              Verificación del repositorio
+tests/                         Pruebas unitarias Java puras
+docs/FIRMA.md                   Configuración de la firma estable
+docs/PRUEBAS.md                 Matriz de validación en dispositivos
+PRIVACIDAD.md                  Política de privacidad
+LICENSE                        MIT
+```
 
-Revisa [PRIVACIDAD.md](PRIVACIDAD.md) antes de utilizar la IA. Grabar una conversación puede exigir informar o pedir consentimiento a los participantes; comprueba la legislación aplicable. Código MIT en [LICENSE](LICENSE). Diseño inspirado en la paleta pública de [Acta](https://github.com/actaapp-es/acta), sin incorporar su código.
+## Aviso legal
+
+Pide los consentimientos que correspondan antes de grabar conversaciones. El uso de la API de Groq puede generar costes según tu plan. El proyecto se distribuye bajo la **licencia MIT**, sin garantía comercial, como software de código abierto.

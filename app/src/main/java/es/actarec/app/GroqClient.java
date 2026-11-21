@@ -16,15 +16,9 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.text.Normalizer;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 /** Peticiones directas a Groq. Utilizar solo una clave introducida por el propio usuario. */
 public final class GroqClient {
@@ -33,15 +27,25 @@ public final class GroqClient {
     private static final String TEXT_MODEL="openai/gpt-oss-120b";
     private static final long MAX_DIRECT=19L*1024*1024; // Margen respecto al límite de 25 MB gratuito
     private final String key;
+    private final String language;
 
     public interface Progress {void update(String message);}
-    public GroqClient(String key) {
+    public GroqClient(String key) {this(key,"");}
+    public GroqClient(String key,String language) {
         if(key==null || key.trim().isEmpty())throw new IllegalArgumentException("Configura tu clave de Groq en Ajustes");
         this.key=key.trim();
+        this.language=("es".equals(language)||"en".equals(language))?language:"";
+    }
+    /** Comprueba la clave personal con un GET sin enviar contenido de usuario. */
+    public void checkConnection() throws Exception {
+        HttpURLConnection conn=(HttpURLConnection)new URL(BASE+"/models").openConnection();
+        conn.setRequestMethod("GET");conn.setConnectTimeout(12000);conn.setReadTimeout(15000);
+        conn.setRequestProperty("Authorization","Bearer "+key);
+        try{new JSONObject(response(conn));}finally{conn.disconnect();}
     }
     public String transcribe(File input,Progress progress) throws Exception {
         if(!input.isFile()||input.length()<128)throw new IllegalArgumentException("No se encontró un audio válido");
-        if(input.length()<=MAX_DIRECT)return transcribePart(input);
+        if(input.length()<=MAX_DIRECT){progress.update("Transcribiendo con Whisper…");return transcribePart(input);}
         String name=input.getName().toLowerCase(Locale.ROOT);
         if(!name.endsWith(".m4a")&&!name.endsWith(".mp4"))
             throw new IllegalArgumentException("Las importaciones de más de 19 MB deben estar en formato M4A/MP4 para poder dividirlas");
@@ -58,10 +62,21 @@ public final class GroqClient {
             }
         }finally {
             for(File p:parts) p.delete();
+            if(!parts.isEmpty())parts.get(0).getParentFile().delete(); // solo si ya está vacía
         }
         return result.toString().trim();
     }
     private String transcribePart(File audio) throws Exception {
+        for(int attempt=0;attempt<3;attempt++){
+            try{return transcribeOnce(audio);}
+            catch(GroqHttpFailure e){
+                if(!e.retryable()||attempt==2)throw e;
+                Thread.sleep((attempt+1)*1800L);
+            }
+        }
+        throw new IllegalStateException("No se pudo transcribir el audio");
+    }
+    private String transcribeOnce(File audio) throws Exception {
         String boundary="Actarec"+System.nanoTime();
         URL url=new URL(BASE+"/audio/transcriptions");
         HttpURLConnection conn=(HttpURLConnection)url.openConnection();
@@ -73,7 +88,7 @@ public final class GroqClient {
             ByteArrayOutputStream prelude=new ByteArrayOutputStream();
             DataOutputStream header=new DataOutputStream(prelude);
             form(header,boundary,"model",AUDIO_MODEL);
-            form(header,boundary,"language","es");
+            if(!language.isEmpty())form(header,boundary,"language",language);
             form(header,boundary,"response_format","json");
             header.writeBytes("--"+boundary+"\r\n");
             header.writeBytes("Content-Disposition: form-data; name=\"file\"; filename=\"audio"+extension(audio)+"\"\r\n");
@@ -134,24 +149,24 @@ public final class GroqClient {
             if(!"audio/mp4a-latm".equals(mime))throw new IllegalArgumentException("Para dividir audios largos es necesario AAC/M4A");
             ByteBuffer buffer=ByteBuffer.allocateDirect(1024*1024);
             MediaCodec.BufferInfo info=new MediaCodec.BufferInfo();
-            long base=-1;int muxTrack=-1;
+            long base=-1;int muxTrack=-1;long bytesInSegment=0;
             while(true) {
                 buffer.clear();
                 int bytes=extractor.readSampleData(buffer,0);
                 if(bytes<0)break;
                 long pts=extractor.getSampleTime();
-                if(muxer==null || pts-base>=SEGMENT_US) {
+                if(muxer==null || pts-base>=SEGMENT_US || (bytesInSegment+bytes)>(MAX_DIRECT-1024*1024)) {
                     if(muxer!=null){muxer.stop();muxer.release();muxer=null;started=false;}
                     File tempDir=new File(source.getParentFile(),".actarec_tmp");
                     if(!tempDir.exists() && !tempDir.mkdirs())throw new IllegalStateException("No se puede crear el directorio temporal");
                     File part=File.createTempFile("actarec_part_",".m4a",tempDir);
                     parts.add(part);
                     muxer=new MediaMuxer(part.getAbsolutePath(),MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
-                    muxTrack=muxer.addTrack(format);muxer.start();started=true;base=pts;
+                    muxTrack=muxer.addTrack(format);muxer.start();started=true;base=pts;bytesInSegment=0;
                 }
                 info.set(0,bytes,Math.max(0,pts-base),extractor.getSampleFlags());
                 buffer.position(0);buffer.limit(bytes);
-                muxer.writeSampleData(muxTrack,buffer,info);
+                muxer.writeSampleData(muxTrack,buffer,info);bytesInSegment+=bytes;
                 extractor.advance();
             }
             if(muxer!=null){muxer.stop();muxer.release();muxer=null;started=false;}
@@ -171,7 +186,7 @@ public final class GroqClient {
                 "Responde en español con encabezados: RESUMEN, DECISIONES, TAREAS Y RESPONSABLES, DATOS IMPORTANTES. " +
                 "Cuando algo no conste, escribe 'No se menciona'. No incluyas datos falsos.";
         if(transcript.length()<=24000) return chat(instructions,"CONVERSACIÓN:\n"+transcript,900,null);
-        List<String> sections=splitText(transcript,20000);
+        List<String> sections=TranscriptSearch.split(transcript,18000);
         StringBuilder notes=new StringBuilder();
         for(int i=0;i<sections.size();i++) {
             progress.update("Resumiendo bloque "+(i+1)+" de "+sections.size());
@@ -179,13 +194,27 @@ public final class GroqClient {
             notes.append(chat("Eres un analista de reuniones. Extrae solo hechos, decisiones, cifras, nombres y tareas explícitas. No inventes datos.",
                     sections.get(i),600,null)).append("\n");
         }
+        String combined=notes.toString();
+        int level=0;
+        while(combined.length()>24000 && level<8){
+            level++;
+            progress.update("Consolidando notas de reuniones largas (fase "+level+")…");
+            StringBuilder smaller=new StringBuilder();
+            for(String section:TranscriptSearch.split(combined,18000)){
+                smaller.append(chat("Reduce estas notas de conversación conservando decisiones, números y tareas verificables. No inventes datos.",section,500,null));
+                smaller.append("\n");
+            }
+            if(smaller.length()>=combined.length())break;
+            combined=smaller.toString();
+        }
+        if(combined.length()>85000)throw new IllegalStateException("Grabación demasiado extensa para resumir en una sola solicitud");
         progress.update("Preparando resumen final");
-        return chat(instructions,"Combina estas notas parciales de una misma conversación:\n"+notes,900,null);
+        return chat(instructions,"Combina estas notas parciales de una misma conversación:\n"+combined,1200,null);
     }
 
     public String ask(String question,String transcript,String summary,List<RecordStore.Message> previous) throws Exception {
         if(transcript==null||transcript.isEmpty())throw new IllegalArgumentException("Primero transcribe esta conversación");
-        String context=relevantExcerpts(transcript,question,18000);
+        String context=TranscriptSearch.excerpts(transcript,question,20000);
         String sys="Eres Actarec, un asistente que responde preguntas sobre una grabación. " +
                 "Solo puedes afirmar lo que aparece en los extractos de la transcripción o en el resumen suministrado. " +
                 "Si faltan datos, responde 'No consta en la conversación disponible'. " +
@@ -194,10 +223,20 @@ public final class GroqClient {
         return chat(sys,body,700,previous);
     }
     private String chat(String instructions,String prompt,int maxTokens,List<RecordStore.Message> previous) throws Exception {
+        for(int attempt=0;attempt<3;attempt++){
+            try{return chatOnce(instructions,prompt,maxTokens,previous);}
+            catch(GroqHttpFailure e){
+                if(!e.retryable()||attempt==2)throw e;
+                Thread.sleep((attempt+1)*1800L);
+            }
+        }
+        throw new IllegalStateException("No se pudo generar la respuesta");
+    }
+    private String chatOnce(String instructions,String prompt,int maxTokens,List<RecordStore.Message> previous) throws Exception {
         JSONObject payload=new JSONObject();payload.put("model",TEXT_MODEL);payload.put("temperature",0.2);
         // GPT-OSS dedica parte del presupuesto a razonamiento interno; reservamos margen
         // para que los resúmenes y respuestas no lleguen vacíos por falta de tokens.
-        payload.put("max_completion_tokens",Math.max(2048,maxTokens+1024));
+        payload.put("max_completion_tokens",Math.max(3072,maxTokens+1200));
         payload.put("reasoning_effort","low");
         payload.put("include_reasoning",false);
         JSONArray messages=new JSONArray();
@@ -239,50 +278,18 @@ public final class GroqClient {
         if(status<200||status>=300) {
             String detail=body;
             try{detail=new JSONObject(body).getJSONObject("error").optString("message",body);}catch(Exception ignored){}
-            throw new IllegalStateException("Groq HTTP "+status+": "+trim(detail,300));
+            throw new GroqHttpFailure(status,"Groq HTTP "+status+": "+trim(detail,300));
         }
         return body;
     }
+    private static final class GroqHttpFailure extends java.io.IOException {
+        final int code;
+        GroqHttpFailure(int code,String message){super(message);this.code=code;}
+        boolean retryable(){return code==408||code==429||code==500||code==502||code==503||code==504;}
+    }
     private static String trim(String text,int max){if(text==null)return "";return text.length()>max?text.substring(0,max):text;}
-    private static List<String> splitText(String text,int maxLen) {
-        List<String> sections=new ArrayList<>();int p=0;
-        while(p<text.length()){
-            int end=Math.min(text.length(),p+maxLen);
-            if(end<text.length()) {
-                int boundary=text.lastIndexOf(' ',end);
-                if(boundary>p+maxLen/2)end=boundary;
-            }
-            sections.add(text.substring(p,end));p=end;
-            while(p<text.length()&&Character.isWhitespace(text.charAt(p)))p++;
-        }
-        return sections;
-    }
-    private static final Set<String> STOPWORDS=new HashSet<>(Arrays.asList(
-            "para","como","donde","cuando","cual","cuanto","sobre","porque","quiero","saber","dijo","dice","dijeron",
-            "que","con","los","las","del","una","por","hay","fue","son","esta","este","estos","estas","todo","todos",
-            "algo","cada","entre","tener","tiene","hemos","han","estamos","cuales","aqui","mucho","desde","hasta"));
-    private static String clean(String s) {
-        return Normalizer.normalize(s.toLowerCase(Locale.ROOT),Normalizer.Form.NFD)
-                .replaceAll("\\p{M}+","").replaceAll("[^a-z0-9 ]"," ");
-    }
-    /** Recuperación local ligera; evita enviar conversaciones enormes en cada pregunta. */
-    static String relevantExcerpts(String transcript,String question,int limit) {
-        if(transcript.length()<=limit)return transcript;
-        List<String> blocks=splitText(transcript,1000);
-        Set<String> words=new HashSet<>();
-        for(String w:clean(question).split("\\s+"))if(w.length()>3&&!STOPWORDS.contains(w))words.add(w);
-        final List<Integer> idx=new ArrayList<>();for(int i=0;i<blocks.size();i++)idx.add(i);
-        idx.sort((i,j)->Integer.compare(score(blocks.get(j),words),score(blocks.get(i),words)));
-        List<Integer> selected=new ArrayList<>();int used=0;
-        for(int i:idx){if(used+blocks.get(i).length()>limit)continue;selected.add(i);used+=blocks.get(i).length();}
-        Collections.sort(selected);
-        StringBuilder out=new StringBuilder();
-        for(int i:selected)out.append("[Fragmento ").append(i+1).append("]\n").append(blocks.get(i)).append("\n\n");
-        return out.toString();
-    }
-    private static int score(String block,Set<String> words) {
-        String content=clean(block);int n=0;
-        for(String w:words)if(content.contains(w))n+=4;
-        return n;
+    /** API anterior preservada para herramientas de diagnóstico y pruebas. */
+    static String relevantExcerpts(String transcript,String question,int limit){
+        return TranscriptSearch.excerpts(transcript,question,limit);
     }
 }

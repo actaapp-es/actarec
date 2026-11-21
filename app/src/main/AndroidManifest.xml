@@ -4,16 +4,19 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Android 16: solicitud opcional de actualizaciones en vivo en la barra de estado. -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
 
     <application
         android:label="Actarec"
         android:theme="@style/Theme.Actarec"
-        android:icon="@drawable/ic_app"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:supportsRtl="true"
         android:usesCleartextTraffic="false">
@@ -26,6 +29,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <provider android:name=".AudioProvider" android:authorities="${applicationId}.audio" android:exported="false" android:grantUriPermissions="true" />
+        <service android:name=".AnalysisService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service
             android:name=".RecordingService"
             android:exported="false"
