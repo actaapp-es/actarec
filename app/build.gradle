@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Firma de producción opcional; los secretos SOLO se leen del entorno de GitHub Actions.
+def storePath = System.getenv('ACTAREC_STORE_FILE')
+def storePasswordEnv = System.getenv('ACTAREC_STORE_PASSWORD')
+def keyAliasEnv = System.getenv('ACTAREC_KEY_ALIAS')
+def keyPasswordEnv = System.getenv('ACTAREC_KEY_PASSWORD')
+def signed = [storePath,storePasswordEnv,keyAliasEnv,keyPasswordEnv].every { it != null && !it.isEmpty() }
+
+android {
+    namespace 'es.actarec.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'es.actarec.app'
+        minSdk 29
+        targetSdk 35
+        versionCode = Integer.parseInt((project.findProperty('actarecVersionCode') ?: '3000').toString())
+        versionName = (project.findProperty('actarecVersionName') ?: '0.3.0-preview').toString()
+    }
+    signingConfigs {
+        if (signed) {
+            create('actarecRelease') {
+                storeFile file(storePath)
+                storePassword storePasswordEnv
+                keyAlias keyAliasEnv
+                keyPassword keyPasswordEnv
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+            if (signed) { signingConfig = signingConfigs.actarecRelease }
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
