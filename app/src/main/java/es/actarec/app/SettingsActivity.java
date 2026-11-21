@@ -67,6 +67,49 @@ public final class SettingsActivity extends Activity {
         try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}
         addRow(priv,"Versión","Actarec es software libre (licencia MIT).",version,null);
         root.addView(priv,side());
+
+        root.addView(Ui.section(this,"Legal"));
+        LinearLayout legal=group();
+        addRow(legal,"Aviso legal","Grabación de conversaciones, uso de la IA y garantías.","",v->legalDialog());
+        root.addView(legal,side());
+
+        root.addView(Ui.section(this,"Comunidad"));
+        LinearLayout social=group();
+        addRow(social,"Canal de Telegram","Novedades y avisos de Acta y Actarec.","t.me/actaapp",v->open("https://t.me/actaapp"));
+        social.addView(Ui.separator(this,18));
+        addRow(social,"Instagram","","@actaapp.es",v->open("https://www.instagram.com/actaapp.es"));
+        social.addView(Ui.separator(this,18));
+        addRow(social,"TikTok","","@actaapp",v->open("https://www.tiktok.com/@actaapp"));
+        root.addView(social,side());
+
+        root.addView(Ui.section(this,"Apoyar el proyecto"));
+        LinearLayout donate=group();
+        addRow(donate,"Donar con Bitcoin","Actarec es gratis y donar no desbloquea nada. Toca para ver la dirección y copiarla.","BTC",v->bitcoinDialog());
+        root.addView(donate,side());
+    }
+    private static final String BTC="bc1qqpyyxg64ac9j4zksmslna9d8sxp9ht7r25k7t9";
+    private void open(String url){
+        try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}
+        catch(Exception e){toast("No hay ninguna aplicación para abrir este enlace");}
+    }
+    private void bitcoinDialog(){
+        TextView t=new TextView(this);t.setText(BTC);t.setTextIsSelectable(true);t.setTextSize(15);
+        t.setTypeface(android.graphics.Typeface.MONOSPACE);t.setPadding(Ui.dp(this,24),Ui.dp(this,16),Ui.dp(this,24),0);
+        new AlertDialog.Builder(this).setTitle("Dirección Bitcoin (BTC)").setView(t)
+            .setMessage("Comprueba la dirección completa antes de enviar: las transacciones de Bitcoin no se pueden deshacer.")
+            .setNegativeButton("Cerrar",null)
+            .setPositiveButton("Copiar",(d,w)->{
+                android.content.ClipboardManager cm=getSystemService(android.content.ClipboardManager.class);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("Dirección Bitcoin",BTC));toast("Dirección copiada");
+            }).show();
+    }
+    private void legalDialog(){
+        new AlertDialog.Builder(this).setTitle("Aviso legal")
+            .setMessage("Grabación: grabar conversaciones puede requerir el consentimiento de las personas que participan, según las leyes de tu país. Informa a quien graba contigo y úsalo bajo tu responsabilidad.\n\n"
+                +"Inteligencia artificial: si la activas con tu clave de Groq, el audio y la transcripción que decidas analizar se envían a Groq. Los resúmenes pueden contener errores: revísalos antes de actuar.\n\n"
+                +"Datos: Actarec no tiene cuentas ni servidores propios, y tus grabaciones se guardan solo en tu móvil.\n\n"
+                +"Garantía: Actarec es software libre bajo licencia MIT y se ofrece tal cual, sin garantía de ningún tipo. Android, Groq, Telegram, Instagram, TikTok y Bitcoin son marcas de sus propietarios; Actarec no está afiliada a ellos.")
+            .setPositiveButton("Entendido",null).show();
     }
     private LinearLayout group(){LinearLayout g=Ui.vertical(this);g.setBackgroundResource(R.drawable.bg_card);g.setClipToOutline(true);return g;}
     private View addRow(LinearLayout group,String title,String sub,String value,View.OnClickListener click){
