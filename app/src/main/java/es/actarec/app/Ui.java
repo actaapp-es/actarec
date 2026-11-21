@@ -63,8 +63,7 @@ public final class Ui {
         t.setBackground(touchBackground(c,bg,13,0));t.setClickable(true);t.setFocusable(true);return t;
     }
     public static TextView tag(Context c,String label,int color){
-        TextView v=text(c,label.toUpperCase(java.util.Locale.ROOT),10.5f,color,true);
-        v.setLetterSpacing(.14f);return v;
+        TextView v=text(c,label,12.5f,color,true);return v;
     }
     public static TextView chip(Context c,String label,boolean active){
         TextView v=text(c,label,12,active?WHITE:GREEN,true);v.setMinHeight(dp(c,37));v.setGravity(Gravity.CENTER);

@@ -24,11 +24,10 @@ public final class SettingsActivity extends Activity {
     }
     private void render(){
         LinearLayout root=Ui.vertical(this);setContentView(Ui.page(this,root));
-        TextView back=Ui.mini(this,"‹  Volver",Ui.SOFT,Ui.GREEN);back.setOnClickListener(v->finish());
+        TextView back=Ui.mini(this,"Volver",Ui.SOFT,Ui.GREEN);back.setOnClickListener(v->finish());
         root.addView(back,Ui.lp(this,-2,-2));root.addView(Ui.space(this,25));
-        root.addView(Ui.tag(this,"CONFIGURA TU EXPERIENCIA",Ui.GREEN));root.addView(Ui.space(this,8));
-        root.addView(Ui.text(this,"Ajustes de Actarec",30,Ui.INK,true));root.addView(Ui.space(this,9));
-        root.addView(Ui.text(this,"Una aplicación personal. Tus audios son tuyos.",14,Ui.MUTED,false));
+                root.addView(Ui.text(this,"Ajustes de Actarec",30,Ui.INK,true));root.addView(Ui.space(this,9));
+        root.addView(Ui.text(this,"Tus grabaciones se guardan solo en este móvil.",14,Ui.MUTED,false));
         root.addView(Ui.space(this,25));
         drawGroq(root);root.addView(Ui.space(this,12));
         drawOverlay(root);root.addView(Ui.space(this,12));
@@ -36,7 +35,7 @@ public final class SettingsActivity extends Activity {
         drawPrivacy(root);root.addView(Ui.space(this,25));
         String version="1.0.0";
         try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}
-        root.addView(Ui.tag(this,"ACTAREC "+version+" · DISEÑADO PARA ANDROID",Ui.FAINT));
+        root.addView(Ui.tag(this,"Actarec "+version,Ui.FAINT));
     }
     private void drawGroq(LinearLayout root){
         LinearLayout box=Ui.card(this);LinearLayout title=Ui.horizontal(this);
@@ -46,7 +45,7 @@ public final class SettingsActivity extends Activity {
         text.addView(Ui.text(this,"Transcribir · Resumir · Preguntar",12,Ui.MUTED,false));title.addView(text,p);box.addView(title);
         box.addView(Ui.space(this,15));
         boolean configured=SecureKey.configured(this);
-        TextView status=Ui.mini(this,configured?"✓  Clave conectada":"○  Falta configurar",configured?Ui.SOFT:Ui.CREAM,configured?Ui.GREEN:Ui.MUTED);
+        TextView status=Ui.mini(this,configured?"Clave guardada":"Falta la clave",configured?Ui.SOFT:Ui.CREAM,configured?Ui.GREEN:Ui.MUTED);
         box.addView(status,Ui.lp(this,-2,-2));box.addView(Ui.space(this,12));
         box.addView(Ui.text(this,"Utiliza tu propia API key. Se cifra con Android Keystore y nunca se incluye en las APK públicas.",13,Ui.MUTED,false));
         box.addView(Ui.space(this,13));
@@ -90,7 +89,7 @@ public final class SettingsActivity extends Activity {
         box.addView(Ui.text(this,"Muestra el tiempo y permite pausar y guardar junto al recorte superior. No modifica la isla del sistema ni puede funcionar en todos los fabricantes.",13,Ui.MUTED,false));
         box.addView(Ui.space(this,11));
         boolean notch=getSharedPreferences("prefs",MODE_PRIVATE).getBoolean("has_cutout",false);
-        box.addView(Ui.text(this,notch?"✓  Recorte de pantalla detectado":"Sin recorte detectado: usa notificaciones",12.5f,notch?Ui.GREEN:Ui.MUTED,true));
+        box.addView(Ui.text(this,notch?"Recorte de pantalla detectado":"Sin recorte detectado: usa notificaciones",12.5f,notch?Ui.GREEN:Ui.MUTED,true));
         box.addView(Ui.space(this,9));
         Switch enabled=new Switch(this);enabled.setText("Mostrar cápsula al grabar");enabled.setTextColor(Ui.INK);enabled.setTextSize(13.5f);
         enabled.setPadding(0,Ui.dp(this,5),0,Ui.dp(this,5));

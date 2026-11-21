@@ -42,11 +42,11 @@ final class OverlayController {
                 screen.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);
                 service.startActivity(screen);
             });capsule.addView(clock);
-            pause=Ui.mini(service,"Ⅱ",0xFF37403C,Ui.WHITE);
+            pause=Ui.mini(service,"Pausa",0xFF37403C,Ui.WHITE);
             LinearLayout.LayoutParams pp=Ui.lp(service,44,39);pp.leftMargin=Ui.dp(service,6);
             capsule.addView(pause,pp);
             Ui.clickable(pause,"Pausar o reanudar",v->control(RecordingService.ACTION_TOGGLE));
-            TextView stop=Ui.mini(service,"■",0xFF603D3B,0xFFFFCFC9);
+            TextView stop=Ui.mini(service,"Guardar",0xFF603D3B,0xFFFFCFC9);
             LinearLayout.LayoutParams sp=Ui.lp(service,44,39);sp.leftMargin=Ui.dp(service,5);
             capsule.addView(stop,sp);Ui.clickable(stop,"Detener y guardar",v->control(RecordingService.ACTION_STOP));
             int statusBar=0;
@@ -67,7 +67,7 @@ final class OverlayController {
         if(!allowed()){remove();return;}
         if(!added)return;
         clock.setText((paused?"PAUSA ":"REC ")+Ui.mmss(duration));
-        pause.setText(paused?"▶":"Ⅱ");
+        pause.setText(paused?"Seguir":"Pausa");
     }
     private void control(String action){
         service.startService(new Intent(service,RecordingService.class).setAction(action));

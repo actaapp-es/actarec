@@ -41,7 +41,7 @@ public final class DetailActivity extends Activity {
             try{
                 if(seek!=null&&!seek.isPressed())seek.setProgress(player.getCurrentPosition());
                 if(playTime!=null)playTime.setText(Ui.mmss(player.getCurrentPosition())+" / "+Ui.mmss(player.getDuration()));
-                if(playLabel!=null)playLabel.setText(player.isPlaying()?"Ⅱ  Pausar":"▶  Reproducir");
+                if(playLabel!=null)playLabel.setText(player.isPlaying()?"Pausar":"Reproducir");
             }catch(Exception ignored){}
         }
         handler.postDelayed(this,350);
@@ -77,14 +77,13 @@ public final class DetailActivity extends Activity {
         RecordStore.Recording r=store.get(id);if(r==null){finish();return;}
         LinearLayout root=Ui.vertical(this);scroll=Ui.page(this,root);setContentView(scroll);
         LinearLayout bar=Ui.horizontal(this);
-        TextView back=Ui.mini(this,"‹  Biblioteca",Ui.SOFT,Ui.GREEN);
+        TextView back=Ui.mini(this,"Biblioteca",Ui.SOFT,Ui.GREEN);
         back.setOnClickListener(v->finish());bar.addView(back,new LinearLayout.LayoutParams(0,-2,1));
-        TextView more=Ui.mini(this,"⋯",Ui.WHITE,Ui.GREEN);
-        more.setTextSize(22);more.setOnClickListener(v->more(r));
-        LinearLayout.LayoutParams mp=Ui.lp(this,46,45);mp.leftMargin=Ui.dp(this,8);bar.addView(more,mp);
+        TextView more=Ui.mini(this,"Más",Ui.WHITE,Ui.GREEN);
+        more.setOnClickListener(v->more(r));
+        LinearLayout.LayoutParams mp=Ui.lp(this,-2,45);mp.leftMargin=Ui.dp(this,8);bar.addView(more,mp);
         root.addView(bar);root.addView(Ui.space(this,24));
-        root.addView(Ui.tag(this,"ARCHIVO DE CONVERSACIÓN",Ui.GREEN));root.addView(Ui.space(this,9));
-        TextView title=Ui.text(this,r.title,29,Ui.INK,true);title.setLetterSpacing(-.02f);title.setMaxLines(3);
+                TextView title=Ui.text(this,r.title,29,Ui.INK,true);title.setLetterSpacing(-.02f);title.setMaxLines(3);
         title.setOnClickListener(v->rename(r));root.addView(title);root.addView(Ui.space(this,8));
         root.addView(Ui.text(this,Ui.date(r.createdAt)+"   ·   "+Ui.mmss(r.durationMs),12.5f,Ui.MUTED,false));
         root.addView(Ui.space(this,21));
@@ -113,18 +112,18 @@ public final class DetailActivity extends Activity {
         root.addView(Ui.space(this,12));
     }
     private void playerCard(LinearLayout root,RecordStore.Recording r){
-        LinearLayout panel=Ui.card(this);panel.setBackground(Ui.shape(this,Ui.DARK_GREEN,24));
+        LinearLayout panel=Ui.card(this);
         LinearLayout top=Ui.horizontal(this);
-        top.addView(Ui.iconSquare(this,"audio",Ui.WHITE,0xFF296253,44),Ui.lp(this,44,44));
+        top.addView(Ui.iconSquare(this,"audio",Ui.GREEN,Ui.SOFT,44),Ui.lp(this,44,44));
         LinearLayout title=Ui.vertical(this);
         LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(0,-2,1);ip.leftMargin=Ui.dp(this,12);
-        title.addView(Ui.tag(this,"AUDIO ORIGINAL",Ui.MINT));title.addView(Ui.space(this,6));
-        title.addView(Ui.text(this,"Tu grabación",17,Ui.WHITE,true));top.addView(title,ip);
+        title.addView(Ui.tag(this,"Audio original",Ui.MUTED));title.addView(Ui.space(this,6));
+        title.addView(Ui.text(this,"Tu grabación",17,Ui.INK,true));top.addView(title,ip);
         panel.addView(top);panel.addView(Ui.space(this,17));
         seek=new SeekBar(this);seek.setMax((int)Math.min(Integer.MAX_VALUE,Math.max(1,r.durationMs)));
-        if(Build.VERSION.SDK_INT>=21){seek.setProgressTintList(android.content.res.ColorStateList.valueOf(Ui.MINT));
-            seek.setThumbTintList(android.content.res.ColorStateList.valueOf(Ui.WHITE));
-            seek.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF577B6D));}
+        if(Build.VERSION.SDK_INT>=21){seek.setProgressTintList(android.content.res.ColorStateList.valueOf(Ui.GREEN));
+            seek.setThumbTintList(android.content.res.ColorStateList.valueOf(Ui.GREEN));
+            seek.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFD8D6CF));}
         if(player!=null){try{seek.setMax(player.getDuration());seek.setProgress(player.getCurrentPosition());}catch(Exception ignored){}}
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             @Override public void onProgressChanged(SeekBar b,int p,boolean fromUser){}
@@ -132,10 +131,10 @@ public final class DetailActivity extends Activity {
             @Override public void onStopTrackingTouch(SeekBar b){try{ensurePlayer(new File(r.path));player.seekTo(b.getProgress());}catch(Exception e){toast("No se pudo avanzar en el audio");}}
         });
         panel.addView(seek);panel.addView(Ui.space(this,4));
-        playTime=Ui.text(this,"00:00 / "+Ui.mmss(r.durationMs),12,0xFFCAE0D4,false);
+        playTime=Ui.text(this,"00:00 / "+Ui.mmss(r.durationMs),12,Ui.MUTED,false);
         if(player!=null){try{playTime.setText(Ui.mmss(player.getCurrentPosition())+" / "+Ui.mmss(player.getDuration()));}catch(Exception ignored){}}
         panel.addView(playTime);panel.addView(Ui.space(this,15));
-        playLabel=Ui.button(this,player!=null&&player.isPlaying()?"Ⅱ  Pausar":"▶  Reproducir",Ui.WHITE,Ui.GREEN);
+        playLabel=Ui.button(this,player!=null&&player.isPlaying()?"Pausar":"Reproducir",Ui.GREEN,Ui.WHITE);
         playLabel.setOnClickListener(v->togglePlay(new File(r.path)));panel.addView(playLabel);
         root.addView(panel);
     }
@@ -143,13 +142,13 @@ public final class DetailActivity extends Activity {
         if(!audio.isFile())throw new IllegalStateException("El audio ya no está disponible");
         if(player!=null)return;
         player=new MediaPlayer();player.setDataSource(audio.getAbsolutePath());player.prepare();
-        player.setOnCompletionListener(v->{if(playLabel!=null)playLabel.setText("▶  Reproducir");if(seek!=null)seek.setProgress(0);});
+        player.setOnCompletionListener(v->{if(playLabel!=null)playLabel.setText("Reproducir");if(seek!=null)seek.setProgress(0);});
         if(seek!=null)seek.setMax(player.getDuration());
     }
     private void togglePlay(File audio){
         try{ensurePlayer(audio);
             if(player.isPlaying())player.pause();else player.start();
-            playLabel.setText(player.isPlaying()?"Ⅱ  Pausar":"▶  Reproducir");
+            playLabel.setText(player.isPlaying()?"Pausar":"Reproducir");
         }catch(Exception e){releasePlayer();toast("No se pudo reproducir el archivo");}
     }
     private void tabHeader(LinearLayout root,RecordStore.Recording r){
@@ -229,7 +228,7 @@ public final class DetailActivity extends Activity {
             LinearLayout bubble=Ui.card(this);
             bubble.setBackground(Ui.shape(this,mine?Ui.SOFT:Ui.WHITE,18));
             bubble.setPadding(Ui.dp(this,16),Ui.dp(this,15),Ui.dp(this,16),Ui.dp(this,15));
-            bubble.addView(Ui.tag(this,mine?"TÚ":"ACTAREC · GROQ",Ui.GREEN));bubble.addView(Ui.space(this,8));
+            bubble.addView(Ui.tag(this,mine?"Tú":"Actarec (Groq)",Ui.GREEN));bubble.addView(Ui.space(this,8));
             TextView content=Ui.text(this,message.body,14,Ui.INK,false);content.setTextIsSelectable(true);
             content.setLineSpacing(Ui.dp(this,3),1);bubble.addView(content);
             root.addView(bubble,Ui.margin(this,-1,-2,0,10));
