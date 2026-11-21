@@ -24,7 +24,6 @@ public final class SettingsActivity extends Activity {
     @Override public void onCreate(Bundle state){super.onCreate(state);seenTheme=Ui.themeGen;render();}
     @Override protected void onResume(){super.onResume();
         Ui.recreateIfThemeChanged(this,seenTheme);
-        if(!Settings.canDrawOverlays(this))Ui.prefs(this).edit().putBoolean("overlay_enabled",false).apply();
         if(RecordingService.running)startService(new Intent(this,RecordingService.class).setAction(RecordingService.ACTION_REFRESH));
         render();
     }
@@ -49,10 +48,6 @@ public final class SettingsActivity extends Activity {
 
         root.addView(Ui.section(this,"Grabación"));
         LinearLayout rec=group();
-        boolean notch=Ui.prefs(this).getBoolean("has_cutout",false);
-        addSwitch(rec,"Cápsula flotante",notch?"Muestra el tiempo y los botones de pausa y guardar junto a la cámara.":"Solo disponible en móviles con cámara o notch en la parte superior.",
-                Ui.prefs(this).getBoolean("overlay_enabled",false),notch);
-        rec.addView(Ui.separator(this,18));
         addRow(rec,"Notificaciones","Controles de pausa y guardar mientras usas otras apps.","",v->{
             Intent i=new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName());
             try{startActivity(i);}catch(Exception e){toast("Abre las notificaciones de Actarec desde los ajustes de Android");}
@@ -81,24 +76,6 @@ public final class SettingsActivity extends Activity {
         TextView v=row.findViewById(R.id.value);if(value.isEmpty())v.setVisibility(View.GONE);else v.setText(value);
         if(click!=null)row.setOnClickListener(click);else{row.setClickable(false);row.setBackground(null);}
         group.addView(row);return row;
-    }
-    private void addSwitch(LinearLayout group,String title,String sub,boolean on,boolean enabled){
-        View row=addRow(group,title,sub,"",null);
-        Switch sw=row.findViewById(R.id.sw);sw.setVisibility(View.VISIBLE);sw.setChecked(on&&enabled);
-        row.setAlpha(enabled?1f:.5f);row.setBackgroundResource(R.drawable.bg_card_click);
-        if(!enabled)return;
-        row.setOnClickListener(v->{
-            boolean now=!sw.isChecked();
-            if(now&&!Settings.canDrawOverlays(this)){
-                new AlertDialog.Builder(this).setTitle("Permitir superposición")
-                    .setMessage("Android debe autorizar que Actarec muestre controles sobre otras aplicaciones. Es opcional: la notificación seguirá disponible.")
-                    .setNegativeButton("Cancelar",null)
-                    .setPositiveButton("Abrir permiso",(d,w)->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName())))).show();
-                return;
-            }
-            sw.setChecked(now);Ui.prefs(this).edit().putBoolean("overlay_enabled",now).apply();
-            if(RecordingService.running)startService(new Intent(this,RecordingService.class).setAction(RecordingService.ACTION_REFRESH));
-        });
     }
     private void keyDialog(){
         boolean has=SecureKey.configured(this);

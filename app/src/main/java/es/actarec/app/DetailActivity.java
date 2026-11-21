@@ -99,6 +99,7 @@ public final class DetailActivity extends Activity {
         TextView meta=Ui.text(this,R.style.Text_Meta,Ui.date(r.createdAt)+" · "+Ui.mmss(r.durationMs));
         meta.setPadding(Ui.dp(this,24),Ui.dp(this,6),Ui.dp(this,24),0);root.addView(meta);
         playerCard(root,r);
+        bookmarksCard(root,r);
         tabHeader(root);
         if(processing()){
             LinearLayout progress=Ui.card(this);progress.setPadding(Ui.dp(this,18),Ui.dp(this,16),Ui.dp(this,18),Ui.dp(this,16));
@@ -145,6 +146,53 @@ public final class DetailActivity extends Activity {
         right.addView(playTime);
         LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(0,Ui.WRAP,1);rp.setMarginStart(Ui.dp(this,10));row.addView(right,rp);
         panel.addView(row);root.addView(panel,side(18));
+    }
+    private long currentPosition(RecordStore.Recording r){
+        try{if(player!=null)return player.getCurrentPosition();}catch(Exception ignored){}
+        return seek!=null?seek.getProgress():0;
+    }
+    private void bookmarksCard(LinearLayout root,RecordStore.Recording r){
+        List<RecordStore.Bookmark> list=store.bookmarks(id);
+        LinearLayout head=Ui.horizontal(this);head.setPadding(Ui.dp(this,26),Ui.dp(this,22),Ui.dp(this,14),0);
+        head.addView(Ui.text(this,R.style.Text_Section,list.isEmpty()?"Marcadores":"Marcadores · "+list.size()),new LinearLayout.LayoutParams(0,Ui.WRAP,1));
+        TextView add=Ui.textButton(this,"Marcar aquí");
+        add.setOnClickListener(v->{store.addBookmark(id,currentPosition(r),"");toast("Marcador añadido");render();});
+        head.addView(add);root.addView(head);
+        if(list.isEmpty()){
+            TextView hint=Ui.text(this,R.style.Text_Meta,"Pulsa «Marcar aquí» mientras escuchas para señalar un momento importante.");
+            hint.setPadding(Ui.dp(this,26),Ui.dp(this,4),Ui.dp(this,26),0);root.addView(hint);return;
+        }
+        LinearLayout group=Ui.vertical(this);group.setBackgroundResource(R.drawable.bg_card);group.setClipToOutline(true);
+        for(int i=0;i<list.size();i++){
+            final RecordStore.Bookmark b=list.get(i);if(i>0)group.addView(Ui.separator(this,56));
+            LinearLayout row=Ui.horizontal(this);row.setPadding(Ui.dp(this,18),Ui.dp(this,12),Ui.dp(this,12),Ui.dp(this,12));
+            row.setBackgroundResource(R.drawable.bg_card_click);row.setClickable(true);
+            row.addView(Ui.iconView(this,R.drawable.ic_bookmark,R.color.accent,20));
+            TextView label=Ui.text(this,R.style.Text_Body,b.label==null||b.label.isEmpty()?"Marcador "+(i+1):b.label);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,Ui.WRAP,1);lp.setMarginStart(Ui.dp(this,14));row.addView(label,lp);
+            row.addView(Ui.text(this,R.style.Text_Meta,Ui.mmss(b.positionMs)));
+            ImageView del=Ui.iconButton(this,R.drawable.ic_trash,R.color.ink_2,"Eliminar marcador");
+            del.setOnClickListener(v->{store.deleteBookmark(b.id);render();});row.addView(del);
+            row.setOnClickListener(v->jumpTo(r,b.positionMs));
+            row.setOnLongClickListener(v->{renameBookmark(b);return true;});
+            row.setContentDescription("Ir al marcador en "+Ui.mmss(b.positionMs));
+            group.addView(row);
+        }
+        root.addView(group,side(8));
+        TextView tip=Ui.text(this,R.style.Text_Meta,"Toca para ir al momento. Mantén pulsado para ponerle nombre.");
+        tip.setTextSize(12);tip.setPadding(Ui.dp(this,26),Ui.dp(this,8),Ui.dp(this,26),0);root.addView(tip);
+    }
+    private void jumpTo(RecordStore.Recording r,long positionMs){
+        try{ensurePlayer(new File(r.path));player.seekTo((int)positionMs);if(!player.isPlaying())player.start();
+            if(seek!=null)seek.setProgress((int)positionMs);if(playIcon!=null)playIcon.setImageResource(R.drawable.ic_pause);
+            scroll[0].post(()->scroll[0].smoothScrollTo(0,0));
+        }catch(Exception e){releasePlayer();toast("No se pudo reproducir el archivo");}
+    }
+    private void renameBookmark(RecordStore.Bookmark b){
+        final EditText input=new EditText(this);input.setSingleLine(true);input.setText(b.label);input.setHint("Nombre del marcador");
+        new AlertDialog.Builder(this).setTitle("Marcador en "+Ui.mmss(b.positionMs)).setView(input)
+            .setPositiveButton("Guardar",(dlg,w)->{store.renameBookmark(b.id,input.getText().toString());render();})
+            .setNegativeButton("Cancelar",null).show();
     }
     private void ensurePlayer(File audio) throws Exception {
         if(!audio.isFile())throw new IllegalStateException("El audio ya no está disponible");

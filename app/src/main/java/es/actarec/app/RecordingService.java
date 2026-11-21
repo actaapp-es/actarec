@@ -26,6 +26,7 @@ public final class RecordingService extends Service {
     public static final String ACTION_START="es.actarec.action.START";
     public static final String ACTION_STOP="es.actarec.action.STOP";
     public static final String ACTION_TOGGLE="es.actarec.action.TOGGLE";
+    public static final String ACTION_MARK="es.actarec.action.MARK";
     public static final String ACTION_REFRESH="es.actarec.action.REFRESH";
     public static final String ACTION_STATE="es.actarec.action.STATE";
     public static final String EXTRA_RECORD_ID="record_id";
@@ -35,10 +36,17 @@ public final class RecordingService extends Service {
     public static volatile boolean running=false,paused=false;
     private static volatile long startAt,pausedTotal,pauseAt,lastRecordId=-1;
     private static volatile float amplitude;
+    private static final java.util.ArrayList<Long> marks=new java.util.ArrayList<>();
+    /** Añade un marcador en el instante actual de la grabación (también en pausa). */
+    public static boolean mark(){
+        if(!running)return false;
+        synchronized(marks){marks.add(elapsed());}return true;
+    }
+    public static int markCount(){synchronized(marks){return marks.size();}}
+    private static java.util.List<Long> takeMarks(){synchronized(marks){java.util.ArrayList<Long> c=new java.util.ArrayList<>(marks);marks.clear();return c;}}
     private final Handler main=new Handler(Looper.getMainLooper());
     private MediaRecorder recorder;
     private File file;
-    private OverlayController overlay;
     private PowerManager.WakeLock wakeLock;
     private long lastNotify=0;
     private final Runnable tick=new Runnable(){@Override public void run(){
@@ -50,7 +58,6 @@ public final class RecordingService extends Service {
             }else amplitude*=0.63f;
         }catch(Exception ignored){amplitude=0;}
         long now=SystemClock.elapsedRealtime();
-        if(overlay!=null){overlay.update(paused,elapsed());}
         if(now-lastNotify>5000){refreshNotification();lastNotify=now;}
         main.postDelayed(this,300);
     }};
@@ -65,7 +72,6 @@ public final class RecordingService extends Service {
         NotificationManager nm=getSystemService(NotificationManager.class);
         NotificationChannel ch=new NotificationChannel(CHANNEL,"Grabación en curso",NotificationManager.IMPORTANCE_LOW);
         ch.setDescription("Control de pausa, reanudación y parada de las grabaciones");ch.setShowBadge(false);nm.createNotificationChannel(ch);
-        overlay=new OverlayController(this);
     }
     @Override public IBinder onBind(Intent i){return null;}
     @Override public int onStartCommand(Intent i,int flags,int startId){
@@ -73,7 +79,8 @@ public final class RecordingService extends Service {
         if(ACTION_START.equals(action)){if(!running)startRecording();}
         else if(ACTION_STOP.equals(action)){if(running)stopRecording();else stopSelf();}
         else if(ACTION_TOGGLE.equals(action)){if(running)toggle();}
-        else if(ACTION_REFRESH.equals(action)){if(running){overlay.showIfAvailable();refreshNotification();}else stopSelf();}
+        else if(ACTION_MARK.equals(action)){if(mark()){refreshNotification();emit(null,-1);}}
+        else if(ACTION_REFRESH.equals(action)){if(running)refreshNotification();else stopSelf();}
         else if(!running)stopSelf();
         return START_NOT_STICKY;
     }
@@ -98,9 +105,9 @@ public final class RecordingService extends Service {
             file=new File(new RecordStore(this).recordingsDir(),name);
             getSharedPreferences("prefs",MODE_PRIVATE).edit().putString(RECOVERY_FILE,file.getAbsolutePath()).apply();
             initializeRecorder(file);
-            startAt=SystemClock.elapsedRealtime();pausedTotal=0;pauseAt=0;amplitude=0;
+            takeMarks();startAt=SystemClock.elapsedRealtime();pausedTotal=0;pauseAt=0;amplitude=0;
             paused=false;running=true;lock();
-            overlay.showIfAvailable();refreshNotification();emit(null,-1);
+            refreshNotification();emit(null,-1);
             main.removeCallbacks(tick);main.post(tick);
         }catch(Exception e){
             cleanup();if(file!=null&&file.length()==0)file.delete();file=null;
@@ -144,7 +151,7 @@ public final class RecordingService extends Service {
             }else{
                 recorder.pause();pauseAt=SystemClock.elapsedRealtime();paused=true;unlock();
             }
-            refreshNotification();overlay.update(paused,elapsed());emit(null,-1);
+            refreshNotification();emit(null,-1);
         }catch(Exception e){emit("No se pudo cambiar el estado: "+safe(e),-1);}
     }
     private void stopRecording(){
@@ -155,7 +162,8 @@ public final class RecordingService extends Service {
         if(valid&&file!=null&&file.isFile()&&file.length()>1024){
             try{
                 String title="Grabación · "+new SimpleDateFormat("d MMM, HH:mm",new Locale("es","ES")).format(new Date());
-                id=new RecordStore(this).add(title,file.getAbsolutePath(),duration);
+                RecordStore st=new RecordStore(this);id=st.add(title,file.getAbsolutePath(),duration);
+                st.addBookmarks(id,takeMarks());
             }catch(Exception e){emit("Audio guardado, pero no se pudo registrar en la biblioteca",-1);}
         }
         // Si Android interrumpió la salida MP4, conservar el archivo para recuperación manual.
@@ -164,7 +172,7 @@ public final class RecordingService extends Service {
             if(file!=null&&file.length()==0)file.delete();
         }
         lastRecordId=id;running=false;paused=false;amplitude=0;
-        main.removeCallbacks(tick);overlay.remove();
+        main.removeCallbacks(tick);
         try{stopForeground(true);}catch(Exception ignored){}
         emit(id<0?"No se completó el archivo de audio. Si es recuperable, aparecerá al abrir Actarec.":null,id);
         stopSelf();
@@ -190,10 +198,11 @@ public final class RecordingService extends Service {
         Notification.Builder n=new Notification.Builder(this,CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_mic)
                 .setContentTitle(paused?"Actarec · en pausa":"Actarec · grabando")
-                .setContentText(Ui.mmss(duration)+"   ·   Pulsa para abrir")
+                .setContentText(Ui.mmss(duration)+(markCount()>0?"   ·   "+markCount()+" marcadores":"   ·   Pulsa para abrir"))
                 .setContentIntent(open).setOnlyAlertOnce(true).setOngoing(true)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).setCategory(Notification.CATEGORY_SERVICE)
                 .addAction(new Notification.Action.Builder(R.drawable.ic_stat_mic,paused?"Reanudar":"Pausar",action(ACTION_TOGGLE,3)).build())
+                .addAction(new Notification.Action.Builder(R.drawable.ic_stat_mic,"Marcar",action(ACTION_MARK,5)).build())
                 .addAction(new Notification.Action.Builder(R.drawable.ic_stat_mic,"Guardar",action(ACTION_STOP,4)).build());
         if(Build.VERSION.SDK_INT>=36){
             // La presentación como isla/Live Update depende de Android y el fabricante.
@@ -210,12 +219,12 @@ public final class RecordingService extends Service {
         catch(SecurityException ignored){}
     }
     @Override public void onDestroy(){
-        main.removeCallbacks(tick);if(overlay!=null)overlay.remove();
+        main.removeCallbacks(tick);
         if(running&&recorder!=null){
             long d=elapsed();boolean valid=true;
             try{recorder.stop();}catch(Exception e){valid=false;}
             if(valid&&file!=null&&file.length()>1024){
-                try{new RecordStore(this).add("Grabación recuperada",file.getAbsolutePath(),d);
+                try{RecordStore st=new RecordStore(this);long rid=st.add("Grabación recuperada",file.getAbsolutePath(),d);st.addBookmarks(rid,takeMarks());
                     getSharedPreferences("prefs",MODE_PRIVATE).edit().remove(RECOVERY_FILE).apply();}catch(Exception ignored){}
             }
         }

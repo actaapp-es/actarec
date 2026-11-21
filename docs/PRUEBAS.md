@@ -7,7 +7,7 @@
 - [ ] Android 10/11 sin notch: grabar, pausar, guardar desde notificación.
 - [ ] Android 13: conceder y denegar `POST_NOTIFICATIONS` y confirmar el resultado.
 - [ ] Android 14/15: grabación en segundo plano tras cambiar de app, apagar pantalla y desbloquear.
-- [ ] Android 16 con notch: superposición permitida y denegada; comprobar cápsula y Live Update si existe.
+- [ ] Android 16: comprobar Live Update si existe.
 - [ ] Al menos dos marcas/fabricantes Android, con y sin restricciones de batería agresivas.
 
 ## Flujo de grabación
@@ -15,7 +15,7 @@
 - [ ] Inicio con permiso de micrófono concedido / denegado.
 - [ ] Audio grabado con pantalla apagada 30 min.
 - [ ] Pausa y reanudación: duración sin contar pausas, archivo reproducible.
-- [ ] Guardar desde notificación y desde cápsula flotante.
+- [ ] Guardar y marcar desde la notificación; marcadores al grabar y al escuchar.
 - [ ] Revocar permiso de superposición durante una grabación.
 - [ ] Abrir otras apps que usen micrófono; verificar que el usuario comprende los límites.
 - [ ] Simular interrupción/reinicio: comprobar recuperación de archivos finalizados sin indexar.

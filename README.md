@@ -8,7 +8,7 @@
 ## Funciones
 
 - **Grabación en segundo plano** con `ForegroundService` de micrófono y controles de **pausa, reanudación y guardar** desde una notificación persistente.
-- **Cápsula flotante opcional** situada **debajo de la barra de estado** en móviles con notch/recorte. Android no permite insertar controles propios dentro del notch de forma universal. Requiere permiso de superposición; en el resto de móviles se usan notificaciones.
+- **Marcadores**: pon marcas en la grabación mientras grabas (botón en la app o en la notificación) y también después, al escuchar. Toca un marcador para ir a ese momento.
 - Grabaciones privadas en almacenamiento interno de la app, **búsqueda, favoritos**, importación de M4A/MP3/WAV/OGG/FLAC/WebM/MP4 y reproducción con desplazamiento.
 - **Transcripción con Groq** (`whisper-large-v3-turbo`), detección automática de idioma o español/inglés, división de archivos largos AAC/M4A.
 - **Resumen y tareas con Groq** (`openai/gpt-oss-120b`) y **preguntas contextualizadas** sobre una conversación. Permite editar la transcripción.

@@ -148,6 +148,11 @@ public final class MainActivity extends Activity {
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,Ui.WRAP,1);p.setMarginStart(Ui.dp(this,10));
             controls.addView(stop,p);stop.setOnClickListener(v->control(RecordingService.ACTION_STOP));
             card.addView(controls,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,18));
+            int marks=RecordingService.markCount();
+            TextView mark=Ui.button(this,marks==0?"Poner marcador":"Poner marcador · "+marks,false);
+            Ui.icon(mark,R.drawable.ic_bookmark,R.color.accent,20);
+            mark.setOnClickListener(v->{if(RecordingService.mark()){Toast.makeText(this,"Marcador en "+Ui.mmss(RecordingService.elapsed()),Toast.LENGTH_SHORT).show();render();}});
+            card.addView(mark,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,10));
         }else{
             TextView start=Ui.button(this,"Grabar",true);Ui.icon(start,R.drawable.ic_wave,R.color.on_accent,20);
             start.setOnClickListener(v->startFlow());card.addView(start,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,18));

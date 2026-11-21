@@ -12,12 +12,16 @@ import java.util.List;
 
 /** Biblioteca local; el proveedor de Groq no recibe nada hasta que el usuario lo autoriza. */
 public final class RecordStore extends SQLiteOpenHelper {
-    private static final int VERSION=2;
+    private static final int VERSION=3;
     public static final class Recording {
         public long id,createdAt,durationMs;
         public String title,path,transcript,summary,error;
         public boolean favorite;
         public boolean analyzed(){return transcript!=null&&!transcript.isEmpty();}
+    }
+    public static final class Bookmark {
+        public long id,recordingId,positionMs;
+        public String label;
     }
     public static final class Message {
         public long id,recordingId,createdAt;
@@ -30,12 +34,18 @@ public final class RecordStore extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE recordings(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,path TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL,duration_ms INTEGER NOT NULL,transcript TEXT NOT NULL DEFAULT '',summary TEXT NOT NULL DEFAULT '',favorite INTEGER NOT NULL DEFAULT 0,analysis_error TEXT NOT NULL DEFAULT '')");
         db.execSQL("CREATE TABLE messages(id INTEGER PRIMARY KEY AUTOINCREMENT,recording_id INTEGER NOT NULL,role TEXT NOT NULL,body TEXT NOT NULL,created_at INTEGER NOT NULL,FOREIGN KEY(recording_id) REFERENCES recordings(id) ON DELETE CASCADE)");
         db.execSQL("CREATE INDEX idx_messages_recording ON messages(recording_id,id)");
+        createBookmarks(db);
+    }
+    private static void createBookmarks(SQLiteDatabase db){
+        db.execSQL("CREATE TABLE IF NOT EXISTS bookmarks(id INTEGER PRIMARY KEY AUTOINCREMENT,recording_id INTEGER NOT NULL,position_ms INTEGER NOT NULL,label TEXT NOT NULL DEFAULT '',FOREIGN KEY(recording_id) REFERENCES recordings(id) ON DELETE CASCADE)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_bookmarks_recording ON bookmarks(recording_id,position_ms)");
     }
     @Override public void onUpgrade(SQLiteDatabase db,int old,int version){
         if(old<2){
             db.execSQL("ALTER TABLE recordings ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0");
             db.execSQL("ALTER TABLE recordings ADD COLUMN analysis_error TEXT NOT NULL DEFAULT ''");
         }
+        if(old<3)createBookmarks(db);
     }
     public File recordingsDir(){
         File f=new File(context.getFilesDir(),"recordings");
@@ -102,6 +112,28 @@ public final class RecordStore extends SQLiteOpenHelper {
         cv.put("role",role);cv.put("body",body);cv.put("created_at",System.currentTimeMillis());
         getWritableDatabase().insertOrThrow("messages",null,cv);
     }
+    public synchronized long addBookmark(long recordingId,long positionMs,String label){
+        ContentValues cv=new ContentValues();cv.put("recording_id",recordingId);cv.put("position_ms",Math.max(0,positionMs));cv.put("label",label==null?"":label.trim());
+        return getWritableDatabase().insertOrThrow("bookmarks",null,cv);
+    }
+    public synchronized void addBookmarks(long recordingId,List<Long> positions){
+        for(Long p:positions)addBookmark(recordingId,p,"");
+    }
+    public synchronized List<Bookmark> bookmarks(long recordingId){
+        List<Bookmark> list=new ArrayList<>();
+        try(Cursor c=getReadableDatabase().query("bookmarks",null,"recording_id=?",new String[]{Long.toString(recordingId)},null,null,"position_ms ASC,id ASC")){
+            while(c.moveToNext()){
+                Bookmark b=new Bookmark();b.id=c.getLong(c.getColumnIndexOrThrow("id"));b.recordingId=recordingId;
+                b.positionMs=c.getLong(c.getColumnIndexOrThrow("position_ms"));b.label=c.getString(c.getColumnIndexOrThrow("label"));list.add(b);
+            }
+        }
+        return list;
+    }
+    public synchronized void renameBookmark(long id,String label){
+        ContentValues cv=new ContentValues();cv.put("label",label==null?"":label.trim());
+        getWritableDatabase().update("bookmarks",cv,"id=?",new String[]{Long.toString(id)});
+    }
+    public synchronized void deleteBookmark(long id){getWritableDatabase().delete("bookmarks","id=?",new String[]{Long.toString(id)});}
     public synchronized void clearMessages(long id){getWritableDatabase().delete("messages","recording_id=?",new String[]{Long.toString(id)});}
     public synchronized List<Message> messages(long id){
         List<Message> list=new ArrayList<>();
@@ -119,6 +151,7 @@ public final class RecordStore extends SQLiteOpenHelper {
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try{
             db.delete("messages","recording_id=?",new String[]{Long.toString(id)});
+            db.delete("bookmarks","recording_id=?",new String[]{Long.toString(id)});
             db.delete("recordings","id=?",new String[]{Long.toString(id)});db.setTransactionSuccessful();
         }finally{db.endTransaction();}
         File f=new File(recording.path);if(validPath(f))f.delete();
