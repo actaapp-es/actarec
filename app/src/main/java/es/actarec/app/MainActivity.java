@@ -25,6 +25,7 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -35,19 +36,19 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Locale;
 
-/** Inicio nativo de Actarec: grabadora persistente y biblioteca privada. */
+/** Inicio de Actarec: grabadora y biblioteca, con la estética de Acta. */
 public final class MainActivity extends Activity {
     private static final int REQ_AUDIO=201,REQ_NOTIFICATION=202,REQ_IMPORT=203;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private LinearLayout page,results,filterRow;
-    private ScrollView scroll;
+    private ScrollView[] scroll=new ScrollView[1];
     private WaveView wave;
     private TextView timer;
     private String search="";
-    private int selectedFilter=0;
+    private int selectedFilter=0,seenTheme;
     private boolean subscribed;
     private final Runnable clock=new Runnable(){@Override public void run(){
-        if(timer!=null){timer.setText(RecordingService.running?Ui.mmss(RecordingService.elapsed()):"00:00");}
+        if(timer!=null)timer.setText(RecordingService.running?Ui.mmss(RecordingService.elapsed()):"0:00");
         if(wave!=null)wave.invalidate();handler.postDelayed(this,180);
     }};
     private final BroadcastReceiver updates=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){
@@ -56,7 +57,8 @@ public final class MainActivity extends Activity {
         else if(i.hasExtra(RecordingService.EXTRA_RECORD_ID))Toast.makeText(MainActivity.this,"Grabación guardada",Toast.LENGTH_SHORT).show();
         render();
     }};
-    @Override public void onCreate(Bundle state){super.onCreate(state);render();
+    @Override protected void attachBaseContext(Context base){super.attachBaseContext(Ui.wrap(base));}
+    @Override public void onCreate(Bundle state){super.onCreate(state);seenTheme=Ui.themeGen;render();
         getWindow().getDecorView().post(this::detectNotch);
         new Thread(()->{int n=new RecordStore(this).recoverOrphans();
             if(n>0)runOnUiThread(()->{if(!isFinishing()){Toast.makeText(this,"Se recuperaron "+n+" grabaciones",Toast.LENGTH_LONG).show();render();}});
@@ -71,80 +73,81 @@ public final class MainActivity extends Activity {
     @Override protected void onStop(){if(subscribed){unregisterReceiver(updates);subscribed=false;}
         handler.removeCallbacks(clock);super.onStop();
     }
-    @Override protected void onResume(){super.onResume();render();}
+    @Override protected void onResume(){super.onResume();Ui.recreateIfThemeChanged(this,seenTheme);render();}
     private void detectNotch(){
         if(Build.VERSION.SDK_INT<28)return;
         WindowInsets inset=getWindow().getDecorView().getRootWindowInsets();
         if(inset==null||inset.getDisplayCutout()==null)return;
         boolean notch=false;
         for(Rect r:inset.getDisplayCutout().getBoundingRects())if(r.top<=Ui.dp(this,72)){notch=true;break;}
-        getSharedPreferences("prefs",MODE_PRIVATE).edit().putBoolean("has_cutout",notch).apply();
+        Ui.prefs(this).edit().putBoolean("has_cutout",notch).apply();
         if(RecordingService.running)startService(new Intent(this,RecordingService.class).setAction(RecordingService.ACTION_REFRESH));
     }
     private void render(){
-        page=Ui.vertical(this);scroll=Ui.page(this,page);setContentView(scroll);
-        LinearLayout toolbar=Ui.horizontal(this);
-        toolbar.addView(Ui.text(this,"Actarec",30,Ui.INK,true),new LinearLayout.LayoutParams(0,-2,1));
-        FrameLayout settings=Ui.iconSquare(this,"settings",Ui.INK,Ui.SOFT,44);
-        settings.setBackground(Ui.shape(this,Ui.SOFT,22));
-        Ui.clickable(settings,"Abrir ajustes",v->startActivity(new Intent(this,SettingsActivity.class)));
-        toolbar.addView(settings,Ui.lp(this,44,44));page.addView(toolbar);
-        page.addView(Ui.space(this,20));
-        drawRecorder();page.addView(Ui.space(this,26));
-        drawLibrary();page.addView(Ui.space(this,12));
+        page=Ui.page(this,Ui.vertical(this),scroll);
+        LinearLayout toolbar=Ui.horizontal(this);toolbar.setPadding(Ui.dp(this,24),Ui.dp(this,10),Ui.dp(this,12),0);
+        toolbar.addView(Ui.text(this,R.style.Text_Title,"Actarec"),new LinearLayout.LayoutParams(0,Ui.WRAP,1));
+        ImageView settings=Ui.iconButton(this,R.drawable.ic_settings,R.color.ink_2,"Abrir ajustes");
+        settings.setOnClickListener(v->startActivity(new Intent(this,SettingsActivity.class)));
+        toolbar.addView(settings);page.addView(toolbar);
+        drawRecorder();drawLibrary();
+    }
+    private LinearLayout.LayoutParams side(int top){
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(Ui.MATCH,Ui.WRAP);
+        p.setMargins(Ui.dp(this,16),Ui.dp(this,top),Ui.dp(this,16),0);return p;
     }
     private void drawRecorder(){
-        LinearLayout card=Ui.card(this);
         boolean active=RecordingService.running;
+        LinearLayout card=Ui.card(this);card.setPadding(Ui.dp(this,22),Ui.dp(this,20),Ui.dp(this,22),Ui.dp(this,20));
         LinearLayout line=Ui.horizontal(this);
         if(active){
-            TextView dot=Ui.text(this,"",1,Ui.RED,false);
-            dot.setBackground(Ui.shape(this,RecordingService.paused?Ui.FAINT:Ui.RED,5));
-            line.addView(dot,Ui.lp(this,10,10));line.addView(Ui.space(this,1),Ui.lp(this,8,1));
+            View dot=new View(this);dot.setBackgroundResource(RecordingService.paused?R.drawable.bg_circle_soft:R.drawable.bg_circle_danger);
+            line.addView(dot,Ui.lp(Ui.dp(this,10),Ui.dp(this,10)));line.addView(new View(this),Ui.lp(Ui.dp(this,8),1));
         }
-        line.addView(Ui.text(this,active?(RecordingService.paused?"En pausa":"Grabando"):"Listo para grabar",14,active?Ui.INK:Ui.MUTED,true));
-        card.addView(line);card.addView(Ui.space(this,14));
-        timer=Ui.text(this,active?Ui.mmss(RecordingService.elapsed()):"00:00",46,Ui.INK,false);
-        timer.setTypeface(android.graphics.Typeface.create("sans-serif-light",0));
-        card.addView(timer);card.addView(Ui.space(this,12));
-        wave=new WaveView(this);card.addView(wave,Ui.lp(this,-1,56));
-        card.addView(Ui.space(this,18));
+        line.addView(Ui.text(this,R.style.Text_Meta,active?(RecordingService.paused?"En pausa":"Grabando"):"Listo para grabar",14,true));
+        card.addView(line);
+        timer=Ui.text(this,R.style.Text,active?Ui.mmss(RecordingService.elapsed()):"0:00",48,false);
+        timer.setTypeface(android.graphics.Typeface.create("sans-serif-light",0));timer.setFontFeatureSettings("tnum");
+        card.addView(timer,Ui.lpTop(this,Ui.WRAP,Ui.WRAP,10));
+        wave=new WaveView(this);card.addView(wave,Ui.lpTop(this,Ui.MATCH,Ui.dp(this,52),12));
         if(active){
             LinearLayout controls=Ui.horizontal(this);
-            TextView pause=Ui.button(this,RecordingService.paused?"Reanudar":"Pausar",Ui.SOFT,Ui.GREEN);
+            TextView pause=Ui.button(this,RecordingService.paused?"Reanudar":"Pausar",false);
             pause.setOnClickListener(v->control(RecordingService.ACTION_TOGGLE));
-            controls.addView(pause,new LinearLayout.LayoutParams(0,-2,1));
-            TextView stop=Ui.button(this,"Guardar",Ui.GREEN,Ui.WHITE);
-            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);p.leftMargin=Ui.dp(this,10);
+            controls.addView(pause,new LinearLayout.LayoutParams(0,Ui.WRAP,1));
+            TextView stop=Ui.button(this,"Guardar",true);
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,Ui.WRAP,1);p.setMarginStart(Ui.dp(this,10));
             controls.addView(stop,p);stop.setOnClickListener(v->control(RecordingService.ACTION_STOP));
-            card.addView(controls);
+            card.addView(controls,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,18));
         }else{
-            TextView start=Ui.button(this,"Grabar",Ui.GREEN,Ui.WHITE);
-            start.setOnClickListener(v->startFlow());card.addView(start);
+            TextView start=Ui.button(this,"Grabar",true);Ui.icon(start,R.drawable.ic_wave,R.color.on_accent,20);
+            start.setOnClickListener(v->startFlow());card.addView(start,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,18));
         }
-        card.addView(Ui.space(this,12));
-        card.addView(Ui.text(this,active?"Puedes usar otras aplicaciones; los controles están en la notificación.":
-            "El audio se queda en tu móvil. Tú decides si enviarlo a Groq.",12.5f,Ui.FAINT,false));
-        page.addView(card,Ui.lp(this,-1,-2));
+        TextView note=Ui.text(this,R.style.Text_Meta,active?"Puedes usar otras aplicaciones; los controles están en la notificación."
+                :"El audio se queda en tu móvil. Tú decides si enviarlo a Groq.");
+        note.setTextSize(12.5f);card.addView(note,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,12));
+        page.addView(card,side(18));
     }
     private void drawLibrary(){
-        LinearLayout top=Ui.horizontal(this);
+        LinearLayout top=Ui.horizontal(this);top.setPadding(Ui.dp(this,26),Ui.dp(this,22),Ui.dp(this,14),0);
         int total=new RecordStore(this).all().size();
-        LinearLayout left=Ui.vertical(this);left.addView(Ui.section(this,"Biblioteca"));
-        left.addView(Ui.space(this,3));left.addView(Ui.text(this,total+(total==1?" grabación":" grabaciones"),12.5f,Ui.MUTED,false));
-        top.addView(left,new LinearLayout.LayoutParams(0,-2,1));
-        TextView importBtn=Ui.mini(this,"Importar audio",Ui.SOFT,Ui.GREEN);
-        importBtn.setOnClickListener(v->importAudio());top.addView(importBtn);
-        page.addView(top);page.addView(Ui.space(this,14));
-        EditText finder=Ui.input(this,"Buscar grabaciones",false);
-        finder.setText(search);finder.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+        top.addView(Ui.text(this,R.style.Text_Section,"Biblioteca · "+total),new LinearLayout.LayoutParams(0,Ui.WRAP,1));
+        TextView importBtn=Ui.textButton(this,"Importar audio");importBtn.setOnClickListener(v->importAudio());top.addView(importBtn);
+        page.addView(top);
+        EditText finder=new EditText(this);finder.setHint("Buscar grabaciones");finder.setSingleLine(true);finder.setTextSize(15.5f);
+        finder.setTextColor(getColor(R.color.ink));finder.setHintTextColor(getColor(R.color.ink_2));finder.setBackgroundResource(R.drawable.bg_field);
+        finder.setPadding(Ui.dp(this,18),Ui.dp(this,14),Ui.dp(this,18),Ui.dp(this,14));finder.setText(search);
+        finder.setCompoundDrawablePadding(Ui.dp(this,10));
+        finder.setCompoundDrawablesRelativeWithIntrinsicBounds(getDrawable(R.drawable.ic_search),null,null,null);
+        if(finder.getCompoundDrawablesRelative()[0]!=null)finder.getCompoundDrawablesRelative()[0].setTint(getColor(R.color.ink_2));
         finder.addTextChangedListener(new TextWatcher(){
             @Override public void beforeTextChanged(CharSequence s,int start,int count,int after){}
             @Override public void onTextChanged(CharSequence s,int start,int before,int count){search=s.toString();refreshResults();}
             @Override public void afterTextChanged(Editable e){}
         });
-        page.addView(finder);page.addView(Ui.space(this,12));
-        filterRow=Ui.horizontal(this);page.addView(filterRow);buildFilters();page.addView(Ui.space(this,6));
+        page.addView(finder,side(4));
+        filterRow=Ui.horizontal(this);filterRow.setPadding(Ui.dp(this,16),0,Ui.dp(this,16),0);
+        page.addView(filterRow,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,12));buildFilters();
         results=Ui.vertical(this);page.addView(results);refreshResults();
     }
     private void buildFilters(){
@@ -152,72 +155,73 @@ public final class MainActivity extends Activity {
         String[] labels={"Todas","Analizadas","Favoritas"};
         for(int i=0;i<labels.length;i++){
             final int index=i;TextView chip=Ui.chip(this,labels[i],selectedFilter==i);
+            chip.setMinHeight(Ui.dp(this,34));
             chip.setOnClickListener(v->{selectedFilter=index;buildFilters();refreshResults();});
-            LinearLayout.LayoutParams p=Ui.lp(this,-2,-2);if(i>0)p.leftMargin=Ui.dp(this,7);
+            LinearLayout.LayoutParams p=Ui.lp(Ui.WRAP,Ui.WRAP);if(i>0)p.setMarginStart(Ui.dp(this,8));
             filterRow.addView(chip,p);
         }
     }
+    private static long dayStart(java.util.Calendar c){
+        java.util.Calendar x=(java.util.Calendar)c.clone();
+        x.set(java.util.Calendar.HOUR_OF_DAY,0);x.set(java.util.Calendar.MINUTE,0);x.set(java.util.Calendar.SECOND,0);x.set(java.util.Calendar.MILLISECOND,0);
+        return x.getTimeInMillis();
+    }
     private String dayLabel(long ms){
         java.util.Calendar now=java.util.Calendar.getInstance(),then=java.util.Calendar.getInstance();then.setTimeInMillis(ms);
-        int d=(int)((startOfDay(now)-startOfDay(then))/86400000L);
+        long d=Math.round((dayStart(now)-dayStart(then))/86400000.0);
         if(d<=0)return "Hoy";if(d==1)return "Ayer";
         return new java.text.SimpleDateFormat("d MMMM yyyy",new Locale("es","ES")).format(new java.util.Date(ms));
     }
-    private static long startOfDay(java.util.Calendar c){
-        java.util.Calendar x=(java.util.Calendar)c.clone();x.set(java.util.Calendar.HOUR_OF_DAY,12);x.set(java.util.Calendar.MINUTE,0);
-        x.set(java.util.Calendar.SECOND,0);x.set(java.util.Calendar.MILLISECOND,0);
-        return x.getTimeInMillis()+x.get(java.util.Calendar.ZONE_OFFSET)+x.get(java.util.Calendar.DST_OFFSET);
-    }
     private void refreshResults(){
         if(results==null)return;results.removeAllViews();
-        List<RecordStore.Recording> recordings=new RecordStore(this).all();int shown=0;
-        String lastDay=null;LinearLayout group=null;
+        List<RecordStore.Recording> recordings=new RecordStore(this).all();
+        java.util.List<RecordStore.Recording> shown=new java.util.ArrayList<>();
         for(RecordStore.Recording r:recordings){
             if(selectedFilter==1&&!r.analyzed())continue;
             if(selectedFilter==2&&!r.favorite)continue;
             if(!search.trim().isEmpty()&&!r.title.toLowerCase(Locale.ROOT).contains(search.trim().toLowerCase(Locale.ROOT)))continue;
-            String day=dayLabel(r.createdAt);
-            if(!day.equals(lastDay)){
-                TextView label=Ui.text(this,day,13,Ui.MUTED,true);label.setPadding(Ui.dp(this,4),0,0,Ui.dp(this,8));
-                results.addView(label,Ui.margin(this,-1,-2,shown==0?8:18,0));
-                group=Ui.vertical(this);group.setBackground(Ui.outlined(this,Ui.WHITE,22,Ui.LINE));
-                results.addView(group,Ui.lp(this,-1,-2));lastDay=day;
-            }else{
-                View line=new View(this);line.setBackgroundColor(Ui.LINE);
-                LinearLayout.LayoutParams lp=Ui.lp(this,-1,1);lp.leftMargin=Ui.dp(this,74);group.addView(line,lp);
-            }
-            addRecording(group,r);shown++;
+            shown.add(r);
         }
-        if(shown==0){
-            LinearLayout empty=Ui.card(this);empty.setGravity(Gravity.CENTER_HORIZONTAL);
-            empty.addView(Ui.text(this,recordings.isEmpty()?"Aún no hay grabaciones":"No hay resultados",16,Ui.INK,true));
-            empty.addView(Ui.space(this,6));
-            TextView message=Ui.text(this,recordings.isEmpty()?"Pulsa Grabar para empezar o importa un audio.":
-                "Prueba otro término o cambia el filtro.",13,Ui.MUTED,false);
-            message.setGravity(Gravity.CENTER);empty.addView(message);
-            results.addView(empty,Ui.margin(this,-1,-2,8,0));
+        if(shown.isEmpty()){
+            LinearLayout empty=Ui.card(this);empty.setGravity(Gravity.CENTER_HORIZONTAL);empty.setPadding(Ui.dp(this,20),Ui.dp(this,28),Ui.dp(this,20),Ui.dp(this,28));
+            empty.addView(Ui.text(this,R.style.Text_Body,recordings.isEmpty()?"Aún no hay grabaciones":"No hay resultados"));
+            TextView m=Ui.text(this,R.style.Text_Meta,recordings.isEmpty()?"Pulsa Grabar para empezar o importa un audio.":"Prueba otro término o cambia el filtro.");
+            m.setGravity(Gravity.CENTER);empty.addView(m,Ui.lpTop(this,Ui.WRAP,Ui.WRAP,6));
+            results.addView(empty,side(16));return;
+        }
+        String lastDay=null;LinearLayout group=null;
+        for(int i=0;i<shown.size();i++){
+            RecordStore.Recording r=shown.get(i);String day=dayLabel(r.createdAt);
+            if(!day.equals(lastDay)){
+                TextView label=Ui.section(this,day);results.addView(label);
+                group=Ui.vertical(this);group.setBackgroundResource(R.drawable.bg_card);group.setClipToOutline(true);
+                results.addView(group,side(0));lastDay=day;
+            }
+            boolean first=group.getChildCount()==0;
+            if(!first)group.addView(Ui.separator(this,70));
+            addRecording(group,r);
         }
     }
     private void addRecording(LinearLayout group,RecordStore.Recording r){
-        LinearLayout box=Ui.horizontal(this);
-        box.setBackground(Ui.touchBackground(this,Ui.WHITE,22,0));
-        box.setPadding(Ui.dp(this,16),Ui.dp(this,14),Ui.dp(this,16),Ui.dp(this,14));
-        FrameLayout av=Ui.iconSquare(this,r.analyzed()?"document":"audio",Ui.GREEN,Ui.SOFT,48);
-        av.setBackground(Ui.shape(this,Ui.SOFT,24));
-        box.addView(av,Ui.lp(this,44,44));
+        LinearLayout box=Ui.horizontal(this);box.setBackgroundResource(R.drawable.bg_card_click);box.setMinimumHeight(Ui.dp(this,68));
+        box.setPadding(Ui.dp(this,14),Ui.dp(this,10),Ui.dp(this,16),Ui.dp(this,10));
+        FrameLayout av=new FrameLayout(this);
+        TextView circle=new TextView(this);circle.setBackgroundResource(R.drawable.bg_avatar);av.addView(circle,new FrameLayout.LayoutParams(Ui.MATCH,Ui.MATCH));
+        ImageView icon=Ui.iconView(this,r.analyzed()?R.drawable.ic_doc:R.drawable.ic_wave,R.color.accent,20);
+        av.addView(icon,new FrameLayout.LayoutParams(Ui.dp(this,20),Ui.dp(this,20),Gravity.CENTER));
+        box.addView(av,Ui.lp(Ui.dp(this,42),Ui.dp(this,42)));
         LinearLayout text=Ui.vertical(this);
-        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,-2,1);tp.leftMargin=Ui.dp(this,14);
-        TextView title=Ui.text(this,r.title,15.5f,Ui.INK,false);title.setMaxLines(2);text.addView(title);
-        text.addView(Ui.space(this,4));
-        String hour=new java.text.SimpleDateFormat("HH:mm",Locale.ROOT).format(new java.util.Date(r.createdAt));
+        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,Ui.WRAP,1);tp.setMarginStart(Ui.dp(this,14));
+        TextView title=Ui.text(this,R.style.Text_Body,r.title);title.setSingleLine(true);title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        text.addView(title);
         String stage=!r.summary.isEmpty()?"Resumida":(r.analyzed()?"Transcrita":"Sin analizar");
-        text.addView(Ui.text(this,hour+" · "+stage,12.5f,Ui.MUTED,false));
+        text.addView(Ui.text(this,R.style.Text_Meta,Ui.hour(r.createdAt)+" · "+stage),Ui.lpTop(this,Ui.MATCH,Ui.WRAP,3));
         box.addView(text,tp);
-        TextView time=Ui.text(this,Ui.mmss(r.durationMs),13,Ui.GREEN,true);
-        LinearLayout.LayoutParams dp=Ui.lp(this,-2,-2);dp.leftMargin=Ui.dp(this,8);box.addView(time,dp);
-        if(r.favorite){Ui.Icon star=new Ui.Icon(this,"star",Ui.GREEN);LinearLayout.LayoutParams sp=Ui.lp(this,16,16);sp.leftMargin=Ui.dp(this,8);box.addView(star,sp);}
-        Ui.clickable(box,"Abrir "+r.title,v->startActivity(new Intent(this,DetailActivity.class).putExtra("id",r.id)));
-        group.addView(box,Ui.lp(this,-1,-2));
+        if(r.favorite){ImageView star=Ui.iconView(this,R.drawable.ic_star_on,R.color.accent,16);LinearLayout.LayoutParams sp=Ui.lp(Ui.dp(this,16),Ui.dp(this,16));sp.setMarginStart(Ui.dp(this,8));box.addView(star,sp);}
+        TextView time=Ui.text(this,R.style.Text_Meta,Ui.mmss(r.durationMs),13.5f,true);time.setTextColor(getColor(R.color.accent));
+        LinearLayout.LayoutParams dp=Ui.lp(Ui.WRAP,Ui.WRAP);dp.setMarginStart(Ui.dp(this,10));box.addView(time,dp);
+        Ui.clickableCard(box,"Abrir "+r.title,v->startActivity(new Intent(this,DetailActivity.class).putExtra("id",r.id)));
+        group.addView(box,Ui.lp(Ui.MATCH,Ui.WRAP));
     }
     private void control(String action){startService(new Intent(this,RecordingService.class).setAction(action));}
     private void startFlow(){
@@ -298,7 +302,7 @@ public final class MainActivity extends Activity {
     /** Vista reactiva con intensidad real del micrófono, no una onda inventada. */
     private static final class WaveView extends View {
         private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final float[] levels=new float[42];
+        private final float[] levels=new float[44];
         private long lastSample=0;
         WaveView(Context c){super(c);for(int i=0;i<levels.length;i++)levels[i]=.13f;}
         @Override protected void onDraw(Canvas canvas){super.onDraw(canvas);
@@ -308,12 +312,12 @@ public final class MainActivity extends Activity {
                 levels[levels.length-1]=Math.max(.10f,RecordingService.amplitude());lastSample=System.currentTimeMillis();
             }
             float gap=getWidth()/(float)levels.length;
-            paint.setColor(recording?Ui.GREEN:0xFFD8D6CF);paint.setStyle(Paint.Style.FILL);
+            paint.setColor(getContext().getColor(recording?R.color.accent:R.color.track));paint.setStyle(Paint.Style.FILL);
             for(int i=0;i<levels.length;i++){
                 float level=RecordingService.running?levels[i]:.2f+.3f*(float)Math.abs(Math.sin(i*.43f));
-                float height=Ui.dp(getContext(),5)+level*(getHeight()-Ui.dp(getContext(),9));
-                float left=i*gap+gap*.29f,center=getHeight()/2f;
-                canvas.drawRoundRect(left,center-height/2,left+gap*.42f,center+height/2,Ui.dp(getContext(),3),Ui.dp(getContext(),3),paint);
+                float height=Ui.dp(getContext(),4)+level*(getHeight()-Ui.dp(getContext(),8));
+                float left=i*gap+gap*.28f,center=getHeight()/2f;
+                canvas.drawRoundRect(left,center-height/2,left+gap*.44f,center+height/2,Ui.dp(getContext(),2),Ui.dp(getContext(),2),paint);
             }
         }
     }

@@ -1,0 +1,8 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:background="?android:attr/selectableItemBackground" android:paddingStart="18dp" android:paddingEnd="16dp" android:paddingTop="14dp" android:paddingBottom="14dp" android:minHeight="64dp">
+  <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical">
+    <TextView android:id="@+id/title" style="@style/Text" android:textSize="15.5sp" android:fontFamily="sans-serif-medium" android:layout_width="match_parent" android:layout_height="wrap_content" android:lineSpacingExtra="2dp"/>
+    <TextView android:id="@+id/sub" style="@style/Text.Meta" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:lineSpacingExtra="2dp"/>
+  </LinearLayout>
+  <TextView android:id="@+id/value" style="@style/Text.Meta" android:textSize="13.5sp" android:fontFamily="sans-serif-medium" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="14dp" android:maxWidth="150dp" android:gravity="end"/>
+  <Switch android:id="@+id/sw" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="14dp" android:visibility="gone" android:clickable="false" android:focusable="false" android:thumbTint="@color/thumb_off" android:trackTint="@color/track" android:trackTintMode="src_over"/>
+</LinearLayout>

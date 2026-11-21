@@ -1,3 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="icon_background">#1E4D45</color>
+    <color name="bg">#F5F4F0</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_2">#ECEBE6</color>
+    <color name="ink">#151614</color>
+    <color name="ink_2">#5C5E59</color>
+    <color name="ink_3">#8B8D87</color>
+    <color name="line">#E6E4DE</color>
+    <color name="track">#D8D6CF</color>
+    <color name="accent">#1E4D45</color>
+    <color name="accent_soft">#E1EBE7</color>
+    <color name="on_accent">#FFFFFF</color>
+    <color name="danger">#B3261E</color>
+    <color name="danger_soft">#F7E3E0</color>
+    <color name="ok">#1E7A4B</color>
+    <color name="ok_soft">#E0F0E6</color>
+    <color name="warn">#7A5300</color>
+    <color name="warn_soft">#F6ECD5</color>
+    <color name="call">#1F8A55</color>
+    <color name="thumb_off">#FFFFFF</color>
+    <color name="ripple">#1A151614</color>
+    <color name="code_bg">#16201D</color>
+    <color name="code_ink">#E9F2EE</color>
+    <color name="code_dim">#8FA59D</color>
+    <color name="av1_bg">#DDE8E3</color><color name="av1_fg">#1E4D45</color>
+    <color name="av2_bg">#EFE6D6</color><color name="av2_fg">#6B4E16</color>
+    <color name="av3_bg">#F1DFD8</color><color name="av3_fg">#7A3B26</color>
+    <color name="av4_bg">#DEE3EA</color><color name="av4_fg">#2F4058</color>
+    <color name="av5_bg">#E8DFEA</color><color name="av5_fg">#5A3463</color>
 </resources>

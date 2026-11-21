@@ -2,146 +2,142 @@ package es.actarec.app;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
-import android.content.res.ColorStateList;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.text.InputType;
+import android.view.LayoutInflater;
+import android.view.View;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-/** Preferencias: clave Groq propia, controles en segundo plano y privacidad. */
+/** Ajustes con la misma estética que Acta: grupos de filas, valores a la derecha e interruptores. */
 public final class SettingsActivity extends Activity {
-    @Override public void onCreate(Bundle state){super.onCreate(state);render();}
+    private int seenTheme;
+    @Override protected void attachBaseContext(Context base){super.attachBaseContext(Ui.wrap(base));}
+    @Override public void onCreate(Bundle state){super.onCreate(state);seenTheme=Ui.themeGen;render();}
     @Override protected void onResume(){super.onResume();
-        if(!Settings.canDrawOverlays(this))getSharedPreferences("prefs",MODE_PRIVATE).edit().putBoolean("overlay_enabled",false).apply();
+        Ui.recreateIfThemeChanged(this,seenTheme);
+        if(!Settings.canDrawOverlays(this))Ui.prefs(this).edit().putBoolean("overlay_enabled",false).apply();
         if(RecordingService.running)startService(new Intent(this,RecordingService.class).setAction(RecordingService.ACTION_REFRESH));
         render();
     }
+    private LinearLayout.LayoutParams side(){
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(Ui.MATCH,Ui.WRAP);p.setMargins(Ui.dp(this,16),0,Ui.dp(this,16),0);return p;
+    }
     private void render(){
-        LinearLayout root=Ui.vertical(this);setContentView(Ui.page(this,root));
-        TextView back=Ui.mini(this,"Volver",Ui.SOFT,Ui.GREEN);back.setOnClickListener(v->finish());
-        root.addView(back,Ui.lp(this,-2,-2));root.addView(Ui.space(this,25));
-                root.addView(Ui.text(this,"Ajustes de Actarec",30,Ui.INK,true));root.addView(Ui.space(this,9));
-        root.addView(Ui.text(this,"Tus grabaciones se guardan solo en este móvil.",14,Ui.MUTED,false));
-        root.addView(Ui.space(this,25));
-        drawGroq(root);root.addView(Ui.space(this,12));
-        drawOverlay(root);root.addView(Ui.space(this,12));
-        drawLanguage(root);root.addView(Ui.space(this,12));
-        drawPrivacy(root);root.addView(Ui.space(this,25));
-        String version="1.0.0";
+        LinearLayout root=Ui.page(this,Ui.vertical(this),null);
+        LinearLayout bar=Ui.horizontal(this);bar.setPadding(Ui.dp(this,8),Ui.dp(this,2),0,0);
+        ImageView back=Ui.iconButton(this,R.drawable.ic_back,R.color.ink,"Volver");back.setOnClickListener(v->finish());bar.addView(back);
+        root.addView(bar);
+        TextView title=Ui.text(this,R.style.Text_Title,"Ajustes");title.setPadding(Ui.dp(this,24),Ui.dp(this,8),Ui.dp(this,24),0);root.addView(title);
+
+        root.addView(Ui.section(this,"Inteligencia artificial"));
+        LinearLayout ai=group();
+        boolean has=SecureKey.configured(this);
+        addRow(ai,"Clave de Groq","Se guarda cifrada en el móvil. Tú pones tu propia clave y pagas solo lo que uses (hay nivel gratuito).",has?"Guardada":"Falta",v->keyDialog());
+        ai.addView(Ui.separator(this,18));
+        String lang=Ui.prefs(this).getString("language","");
+        addRow(ai,"Idioma de transcripción","Mejora el reconocimiento de nombres y cifras.","en".equals(lang)?"Inglés":"Español",v->languageDialog());
+        root.addView(ai,side());
+
+        root.addView(Ui.section(this,"Grabación"));
+        LinearLayout rec=group();
+        boolean notch=Ui.prefs(this).getBoolean("has_cutout",false);
+        addSwitch(rec,"Cápsula flotante",notch?"Muestra el tiempo y los botones de pausa y guardar junto a la cámara.":"Solo disponible en móviles con cámara o notch en la parte superior.",
+                Ui.prefs(this).getBoolean("overlay_enabled",false),notch);
+        rec.addView(Ui.separator(this,18));
+        addRow(rec,"Notificaciones","Controles de pausa y guardar mientras usas otras apps.","",v->{
+            Intent i=new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName());
+            try{startActivity(i);}catch(Exception e){toast("Abre las notificaciones de Actarec desde los ajustes de Android");}
+        });
+        root.addView(rec,side());
+
+        root.addView(Ui.section(this,"Apariencia"));
+        LinearLayout look=group();
+        addRow(look,"Tema","",Ui.THEME_SHORT[Ui.theme(this)],v->themeDialog());
+        root.addView(look,side());
+
+        root.addView(Ui.section(this,"Privacidad"));
+        LinearLayout priv=group();
+        addRow(priv,"Todo se queda en tu móvil","Audios, transcripciones y respuestas se guardan solo en Actarec. El audio se envía a Groq únicamente cuando pulsas analizar y lo autorizas. Sin anuncios ni analítica.","",null);
+        priv.addView(Ui.separator(this,18));
+        String version="";
         try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}
-        root.addView(Ui.tag(this,"Actarec "+version,Ui.FAINT));
+        addRow(priv,"Versión","Actarec es software libre (licencia MIT).",version,null);
+        root.addView(priv,side());
     }
-    private void drawGroq(LinearLayout root){
-        LinearLayout box=Ui.card(this);LinearLayout title=Ui.horizontal(this);
-        title.addView(Ui.iconSquare(this,"spark",Ui.GREEN,Ui.SOFT,43),Ui.lp(this,43,43));
-        LinearLayout text=Ui.vertical(this);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);p.leftMargin=Ui.dp(this,12);
-        text.addView(Ui.text(this,"Inteligencia con Groq",18,Ui.INK,true));text.addView(Ui.space(this,4));
-        text.addView(Ui.text(this,"Transcribir · Resumir · Preguntar",12,Ui.MUTED,false));title.addView(text,p);box.addView(title);
-        box.addView(Ui.space(this,15));
-        boolean configured=SecureKey.configured(this);
-        TextView status=Ui.mini(this,configured?"Clave guardada":"Falta la clave",configured?Ui.SOFT:Ui.CREAM,configured?Ui.GREEN:Ui.MUTED);
-        box.addView(status,Ui.lp(this,-2,-2));box.addView(Ui.space(this,12));
-        box.addView(Ui.text(this,"Utiliza tu propia API key. Se cifra con Android Keystore y nunca se incluye en las APK públicas.",13,Ui.MUTED,false));
-        box.addView(Ui.space(this,13));
-        EditText field=Ui.input(this,configured?"Nueva clave (para reemplazarla)":"Introduce tu clave gsk_…",true);
-        box.addView(field);box.addView(Ui.space(this,10));
-        TextView save=Ui.button(this,configured?"Actualizar clave Groq":"Guardar clave Groq",Ui.GREEN,Ui.WHITE);
-        save.setOnClickListener(v->{
-            String key=field.getText().toString().trim();
-            if(!key.startsWith("gsk_")||key.length()<15){toast("Introduce una clave de Groq válida (gsk_…)");return;}
-            try{SecureKey.set(this,key);field.setText("");toast("Clave cifrada y guardada");render();}
-            catch(Exception e){toast("No se pudo guardar en Android Keystore");}
-        });box.addView(save);
-        if(configured){
-            box.addView(Ui.space(this,8));
-            TextView verify=Ui.mini(this,"Comprobar conexión",Ui.SOFT,Ui.GREEN);
-            verify.setOnClickListener(v->{verify.setEnabled(false);verify.setText("Comprobando…");
-                new Thread(()->{
-                    String msg;
-                    try{new GroqClient(SecureKey.get(this)).checkConnection();msg="Conexión con Groq correcta";}
-                    catch(Exception e){msg="No se pudo conectar: "+(e.getMessage()==null?"error de red":e.getMessage());}
-                    final String result=msg;runOnUiThread(()->{verify.setEnabled(true);verify.setText("Comprobar conexión");toast(result);});
-                }).start();
-            });box.addView(verify);
-            box.addView(Ui.space(this,8));
-            TextView remove=Ui.mini(this,"Eliminar clave",0xFFFFE9E6,0xFFA73C33);
-            remove.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Eliminar clave Groq")
-                    .setMessage("Los audios y los análisis que ya están guardados seguirán en el teléfono.")
-                    .setNegativeButton("Cancelar",null).setPositiveButton("Eliminar",(d,w)->{
-                        try{SecureKey.set(this,"");render();}catch(Exception e){toast("No se pudo eliminar la clave");}
-                    }).show());box.addView(remove);
-        }
-        root.addView(box);
+    private LinearLayout group(){LinearLayout g=Ui.vertical(this);g.setBackgroundResource(R.drawable.bg_card);g.setClipToOutline(true);return g;}
+    private View addRow(LinearLayout group,String title,String sub,String value,View.OnClickListener click){
+        View row=LayoutInflater.from(this).inflate(R.layout.row_setting,group,false);
+        ((TextView)row.findViewById(R.id.title)).setText(title);
+        TextView s=row.findViewById(R.id.sub);if(sub.isEmpty())s.setVisibility(View.GONE);else s.setText(sub);
+        TextView v=row.findViewById(R.id.value);if(value.isEmpty())v.setVisibility(View.GONE);else v.setText(value);
+        if(click!=null)row.setOnClickListener(click);else{row.setClickable(false);row.setBackground(null);}
+        group.addView(row);return row;
     }
-    private void drawOverlay(LinearLayout root){
-        LinearLayout box=Ui.card(this);LinearLayout line=Ui.horizontal(this);
-        line.addView(Ui.iconSquare(this,"audio",Ui.GREEN,Ui.SOFT,43),Ui.lp(this,43,43));
-        LinearLayout title=Ui.vertical(this);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);p.leftMargin=Ui.dp(this,12);
-        title.addView(Ui.text(this,"Cápsula flotante",18,Ui.INK,true));title.addView(Ui.space(this,4));
-        title.addView(Ui.text(this,"Para pantallas con notch o cámara",12,Ui.MUTED,false));line.addView(title,p);box.addView(line);
-        box.addView(Ui.space(this,14));
-        box.addView(Ui.text(this,"Muestra el tiempo y permite pausar y guardar junto al recorte superior. No modifica la isla del sistema ni puede funcionar en todos los fabricantes.",13,Ui.MUTED,false));
-        box.addView(Ui.space(this,11));
-        boolean notch=getSharedPreferences("prefs",MODE_PRIVATE).getBoolean("has_cutout",false);
-        box.addView(Ui.text(this,notch?"Recorte de pantalla detectado":"Sin recorte detectado: usa notificaciones",12.5f,notch?Ui.GREEN:Ui.MUTED,true));
-        box.addView(Ui.space(this,9));
-        Switch enabled=new Switch(this);enabled.setText("Mostrar cápsula al grabar");enabled.setTextColor(Ui.INK);enabled.setTextSize(13.5f);
-        enabled.setPadding(0,Ui.dp(this,5),0,Ui.dp(this,5));
-        enabled.setThumbTintList(new ColorStateList(new int[][]{new int[]{}},new int[]{Ui.GREEN}));
-        enabled.setTrackTintList(new ColorStateList(new int[][]{new int[]{}},new int[]{Ui.SOFT}));
-        enabled.setEnabled(notch);
-        enabled.setChecked(getSharedPreferences("prefs",MODE_PRIVATE).getBoolean("overlay_enabled",false));
-        enabled.setOnCheckedChangeListener((v,on)->{
-            if(on&&!Settings.canDrawOverlays(this)){
+    private void addSwitch(LinearLayout group,String title,String sub,boolean on,boolean enabled){
+        View row=addRow(group,title,sub,"",null);
+        Switch sw=row.findViewById(R.id.sw);sw.setVisibility(View.VISIBLE);sw.setChecked(on&&enabled);
+        row.setAlpha(enabled?1f:.5f);row.setBackgroundResource(R.drawable.bg_card_click);
+        if(!enabled)return;
+        row.setOnClickListener(v->{
+            boolean now=!sw.isChecked();
+            if(now&&!Settings.canDrawOverlays(this)){
                 new AlertDialog.Builder(this).setTitle("Permitir superposición")
                     .setMessage("Android debe autorizar que Actarec muestre controles sobre otras aplicaciones. Es opcional: la notificación seguirá disponible.")
-                    .setNegativeButton("Cancelar",(d,w)->{enabled.setChecked(false);})
-                    .setPositiveButton("Abrir permiso",(d,w)->{
-                        startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName())));
-                    }).show();
-            }else{
-                getSharedPreferences("prefs",MODE_PRIVATE).edit().putBoolean("overlay_enabled",on).apply();
-                if(RecordingService.running)startService(new Intent(this,RecordingService.class).setAction(RecordingService.ACTION_REFRESH));
+                    .setNegativeButton("Cancelar",null)
+                    .setPositiveButton("Abrir permiso",(d,w)->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName())))).show();
+                return;
             }
-        });box.addView(enabled);box.addView(Ui.space(this,8));
-        TextView notify=Ui.mini(this,"Ajustes de notificaciones de Android",Ui.SOFT,Ui.GREEN);
-        notify.setOnClickListener(v->{
-            Intent i=new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName());
-            try{startActivity(i);}catch(Exception e){toast("Abre las notificaciones de Actarec desde Ajustes de Android");}
-        });box.addView(notify);
-        root.addView(box);
+            sw.setChecked(now);Ui.prefs(this).edit().putBoolean("overlay_enabled",now).apply();
+            if(RecordingService.running)startService(new Intent(this,RecordingService.class).setAction(RecordingService.ACTION_REFRESH));
+        });
     }
-    private void drawLanguage(LinearLayout root){
-        LinearLayout box=Ui.card(this);
-        box.addView(Ui.text(this,"Idioma de transcripción",18,Ui.INK,true));box.addView(Ui.space(this,8));
-        box.addView(Ui.text(this,"Automático detecta otros idiomas. Puedes fijar español o inglés para mejorar el reconocimiento en grabaciones específicas.",13,Ui.MUTED,false));
-        box.addView(Ui.space(this,12));
-        String selected=getSharedPreferences("prefs",MODE_PRIVATE).getString("language","");
-        LinearLayout choices=Ui.horizontal(this);
-        String[] values={"","es","en"},names={"Auto","Español","Inglés"};
-        for(int i=0;i<values.length;i++){
-            final String value=values[i];TextView chip=Ui.chip(this,names[i],selected.equals(value));
-            chip.setOnClickListener(v->{getSharedPreferences("prefs",MODE_PRIVATE).edit().putString("language",value).apply();render();});
-            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);if(i>0)p.leftMargin=Ui.dp(this,7);
-            choices.addView(chip,p);
+    private void keyDialog(){
+        boolean has=SecureKey.configured(this);
+        EditText field=new EditText(this);field.setHint(has?"Nueva clave (para reemplazarla)":"gsk_…");field.setSingleLine(true);
+        field.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);field.setTextColor(getColor(R.color.ink));
+        field.setHintTextColor(getColor(R.color.ink_2));field.setBackgroundResource(R.drawable.bg_field);
+        field.setPadding(Ui.dp(this,18),Ui.dp(this,14),Ui.dp(this,18),Ui.dp(this,14));
+        LinearLayout box=Ui.vertical(this);box.setPadding(Ui.dp(this,22),Ui.dp(this,6),Ui.dp(this,22),0);box.addView(field);
+        AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle("Clave de Groq")
+            .setMessage("Crea una gratis en console.groq.com/keys. Nunca se publica ni sale del móvil salvo hacia Groq.").setView(box)
+            .setNegativeButton("Cancelar",null)
+            .setPositiveButton("Guardar",(d,w)->{
+                String key=field.getText().toString().trim();
+                if(!key.startsWith("gsk_")||key.length()<15){toast("Introduce una clave de Groq válida (gsk_…)");return;}
+                try{SecureKey.set(this,key);toast("Clave guardada y cifrada");render();}catch(Exception e){toast("No se pudo guardar en Android Keystore");}
+            });
+        if(has)b.setNeutralButton("Quitar",(d,w)->{try{SecureKey.set(this,"");render();}catch(Exception e){toast("No se pudo quitar la clave");}});
+        b.show();
+        if(has){
+            // Comprobación rápida de la clave ya guardada
+            new Thread(()->{
+                String msg;
+                try{new GroqClient(this,SecureKey.get(this)).checkConnection();msg="Conexión con Groq correcta";}
+                catch(Exception e){msg=e.getMessage()==null?"No se pudo conectar":e.getMessage();}
+                final String result=msg;runOnUiThread(()->toast(result));
+            }).start();
         }
-        box.addView(choices);root.addView(box);
     }
-    private void drawPrivacy(LinearLayout root){
-        LinearLayout box=Ui.card(this);
-        LinearLayout heading=Ui.horizontal(this);
-        heading.addView(Ui.iconSquare(this,"shield",Ui.GREEN,Ui.SOFT,43),Ui.lp(this,43,43));
-        TextView title=Ui.text(this,"Privacidad y seguridad",18,Ui.INK,true);
-        LinearLayout.LayoutParams p=Ui.lp(this,-2,-2);p.leftMargin=Ui.dp(this,12);heading.addView(title,p);box.addView(heading);
-        box.addView(Ui.space(this,14));
-        box.addView(Ui.text(this,"• Audio, transcripciones y respuestas almacenados localmente.\n\n• El audio se envía a Groq únicamente cuando autorizas un análisis. Las preguntas envían los extractos relevantes.\n\n• Tu clave API se cifra con el Keystore del dispositivo. Los audios usan el cifrado del sistema Android.\n\n• Avisa a las personas que vayas a grabar y cumple las normas de consentimiento aplicables.",13,Ui.MUTED,false));
-        root.addView(box);
+    private void languageDialog(){
+        String[] names={"Español","Inglés"},values={"es","en"};
+        int cur="en".equals(Ui.prefs(this).getString("language",""))?1:0;
+        new AlertDialog.Builder(this).setTitle("Idioma de transcripción").setSingleChoiceItems(names,cur,(d,which)->{
+            Ui.prefs(this).edit().putString("language",values[which]).apply();d.dismiss();render();
+        }).show();
+    }
+    private void themeDialog(){
+        new AlertDialog.Builder(this).setTitle("Tema").setSingleChoiceItems(Ui.THEME_LABELS,Ui.theme(this),(d,which)->{
+            Ui.setTheme(this,which);d.dismiss();recreate();
+        }).show();
     }
     private void toast(String message){Toast.makeText(this,message,Toast.LENGTH_LONG).show();}
 }

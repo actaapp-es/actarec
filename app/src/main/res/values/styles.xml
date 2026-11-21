@@ -1,12 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Actarec" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="Base.Actarec" parent="android:Theme.Material.Light.NoActionBar"/>
+    <style name="Base.Actarec.Dialog" parent="android:Theme.Material.Light.Dialog.Alert"/>
+
+    <style name="Theme.Actarec" parent="Base.Actarec">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorPrimaryDark">@color/bg</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:colorControlHighlight">@color/ripple</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorSecondary">@color/ink_2</item>
+        <item name="android:textColorHint">@color/ink_2</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowLightStatusBar">@bool/light_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/light_bars</item>
         <item name="android:fontFamily">sans-serif</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">#F5F4F0</item>
-        <item name="android:navigationBarColor">#F5F4F0</item>
-        <item name="android:windowLightNavigationBar">true</item>
-        <item name="android:colorAccent">#1E4D45</item>
-        <item name="android:windowBackground">#F5F4F0</item>
-        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:alertDialogTheme">@style/Actarec.Dialog</item>
+        <item name="android:dialogTheme">@style/Actarec.Dialog</item>
+    </style>
+
+    <style name="Actarec.Dialog" parent="Base.Actarec.Dialog">
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:colorBackground">@color/surface</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorSecondary">@color/ink_2</item>
+        <item name="android:windowBackground">@drawable/bg_dialog</item>
+    </style>
+
+    <style name="Text" parent="android:Widget.TextView">
+        <item name="android:textColor">@color/ink</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+    <style name="Text.Title">
+        <item name="android:textSize">30sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">-0.02</item>
+    </style>
+    <style name="Text.Section">
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/ink_2</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+    <style name="Text.Label">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/ink_2</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.04</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+    <style name="Text.Body">
+        <item name="android:textSize">16sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+    <style name="Text.Meta">
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/ink_2</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+    <style name="Text.Action">
+        <item name="android:textSize">14.5sp</item>
+        <item name="android:textColor">@color/accent</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:minHeight">44dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:background">@drawable/bg_tbtn</item>
+    </style>
+    <style name="Text.Chip">
+        <item name="android:textSize">12.5sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/ink_2</item>
+        <item name="android:background">@drawable/bg_chip_n</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">11dp</item>
+        <item name="android:paddingEnd">11dp</item>
+        <item name="android:minHeight">28dp</item>
+        <item name="android:drawablePadding">6dp</item>
+        <item name="android:singleLine">true</item>
+    </style>
+
+    <style name="Theme.Actarec.Sheet" parent="Theme.Actarec">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.InputMethod</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+    </style>
+
+    <style name="Theme.Actarec.Call" parent="Theme.Actarec">
+        <item name="android:windowAnimationStyle">@android:style/Animation.Activity</item>
     </style>
 </resources>

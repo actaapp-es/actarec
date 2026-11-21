@@ -54,7 +54,7 @@ public final class AnalysisService extends Service {
                 if(record==null)throw new IllegalStateException("La grabación ya no existe");
                 String key=SecureKey.get(this);
                 if(key.isEmpty())throw new IllegalStateException("Configura una clave de Groq en Ajustes");
-                GroqClient groq=new GroqClient(key,getSharedPreferences("prefs",MODE_PRIVATE).getString("language",""));
+                GroqClient groq=new GroqClient(this,key,getSharedPreferences("prefs",MODE_PRIVATE).getString("language",""));
                 if(ACTION_ANALYZE.equals(action)){
                     String transcript=record.transcript;
                     if(transcript==null||transcript.trim().isEmpty()){
@@ -64,7 +64,7 @@ public final class AnalysisService extends Service {
                         db.setTranscript(id,transcript); // No perder la transcripción si el resumen falla
                     }
                     update(id,"Preparando resumen y tareas…");
-                    String summary=groq.summarize(transcript,message->update(id,message));
+                    String summary=groq.summarize(transcript,record.createdAt,record.durationMs,message->update(id,message));
                     if(summary.isEmpty())throw new IllegalStateException("Groq no devolvió un resumen");
                     db.setSummary(id,summary);
                 }else{
@@ -72,8 +72,7 @@ public final class AnalysisService extends Service {
                     if(q.isEmpty()||q.length()>1200)throw new IllegalArgumentException("Pregunta vacía o demasiado larga");
                     if(!record.analyzed())throw new IllegalStateException("Primero transcribe la conversación");
                     update(id,"Buscando la respuesta…");
-                    List<RecordStore.Message> previous=db.messages(id);
-                    String answer=groq.ask(q,record.transcript,record.summary,previous);
+                    String answer=groq.ask(q,record.transcript,record.createdAt);
                     if(answer.isEmpty())throw new IllegalStateException("Groq no devolvió una respuesta");
                     db.message(id,"user",q);db.message(id,"assistant",answer);
                 }
