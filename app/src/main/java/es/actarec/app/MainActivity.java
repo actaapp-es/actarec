@@ -58,11 +58,40 @@ public final class MainActivity extends Activity {
         render();
     }};
     @Override protected void attachBaseContext(Context base){super.attachBaseContext(Ui.wrap(base));}
-    @Override public void onCreate(Bundle state){super.onCreate(state);seenTheme=Ui.themeGen;render();
+    @Override public void onCreate(Bundle state){
+        installCrashLog();
+        super.onCreate(state);seenTheme=Ui.themeGen;
+        File prev=new File(getFilesDir(),"crash.txt");
+        if(prev.exists()){showCrash(readAll(prev),prev);}
+        else safeRender();
+        startBackground();
+    }
+    private boolean crashShown;
+    private void safeRender(){crashShown=false;try{render();}catch(Throwable t){showCrash(stack(t),null);}}
+    private static String stack(Throwable t){java.io.StringWriter w=new java.io.StringWriter();t.printStackTrace(new java.io.PrintWriter(w));return w.toString();}
+    private static String readAll(File f){try(java.io.FileInputStream in=new java.io.FileInputStream(f)){byte[] b=new byte[(int)Math.min(f.length(),20000)];int n=in.read(b);return new String(b,0,Math.max(n,0),"UTF-8");}catch(Exception e){return "";}}
+    private void installCrashLog(){
+        final Thread.UncaughtExceptionHandler old=Thread.getDefaultUncaughtExceptionHandler();
+        final File out=new File(getFilesDir(),"crash.txt");
+        Thread.setDefaultUncaughtExceptionHandler((th,e)->{
+            try(FileOutputStream o=new FileOutputStream(out)){o.write((Build.MODEL+" · Android "+Build.VERSION.SDK_INT+"\n"+stack(e)).getBytes("UTF-8"));}catch(Exception ignored){}
+            if(old!=null)old.uncaughtException(th,e);
+        });
+    }
+    /** Pantalla simple con el error, para poder copiarlo y enviarlo. */
+    private void showCrash(String text,File file){crashShown=true;
+        ScrollView sv=new ScrollView(this);LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(40,100,40,40);
+        TextView t=new TextView(this);t.setText("Actarec se cerró por un error. Haz una captura de esta pantalla y envíala:\n\n"+text);t.setTextIsSelectable(true);t.setTextSize(12);
+        l.addView(t);
+        android.widget.Button b=new android.widget.Button(this);b.setText("Continuar");
+        b.setOnClickListener(v->{if(file!=null)file.delete();safeRender();});
+        l.addView(b);sv.addView(l);setContentView(sv);
+    }
+    private void startBackground(){
         getWindow().getDecorView().post(this::detectNotch);
-        new Thread(()->{int n=new RecordStore(this).recoverOrphans();
+        new Thread(()->{try{int n=new RecordStore(this).recoverOrphans();
             if(n>0)runOnUiThread(()->{if(!isFinishing()){Toast.makeText(this,"Se recuperaron "+n+" grabaciones",Toast.LENGTH_LONG).show();render();}});
-        }).start();
+        }catch(Throwable ignored){}}).start();
     }
     @Override protected void onStart(){super.onStart();
         IntentFilter filter=new IntentFilter(RecordingService.ACTION_STATE);
@@ -73,7 +102,7 @@ public final class MainActivity extends Activity {
     @Override protected void onStop(){if(subscribed){unregisterReceiver(updates);subscribed=false;}
         handler.removeCallbacks(clock);super.onStop();
     }
-    @Override protected void onResume(){super.onResume();Ui.recreateIfThemeChanged(this,seenTheme);render();}
+    @Override protected void onResume(){super.onResume();Ui.recreateIfThemeChanged(this,seenTheme);if(!crashShown)safeRender();}
     private void detectNotch(){
         if(Build.VERSION.SDK_INT<28)return;
         WindowInsets inset=getWindow().getDecorView().getRootWindowInsets();
