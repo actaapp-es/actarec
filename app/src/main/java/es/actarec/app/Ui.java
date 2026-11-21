@@ -52,6 +52,9 @@ final class Ui {
     static LinearLayout.LayoutParams lpTop(Context c,int w,int h,float top){
         LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(w,h);l.topMargin=dp(c,top);return l;
     }
+    static LinearLayout.LayoutParams lpMargins(Context c,float l,float t,float r,float b){
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(MATCH,WRAP);p.setMargins(dp(c,l),dp(c,t),dp(c,r),dp(c,b));return p;
+    }
     static LinearLayout vertical(Context c){LinearLayout l=new LinearLayout(c);l.setOrientation(LinearLayout.VERTICAL);return l;}
     static LinearLayout horizontal(Context c){LinearLayout l=new LinearLayout(c);l.setOrientation(LinearLayout.HORIZONTAL);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
 
