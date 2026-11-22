@@ -41,6 +41,27 @@ public final class GroqClient {
     private final String language;
 
     public interface Progress {void update(String message);}
+    /** Límite de uso de Groq alcanzado; seconds es lo que Groq pide esperar (-1 si no lo dice). */
+    public static final class RateLimit extends Exception {
+        public final int seconds;
+        RateLimit(int seconds){super("Límite gratuito de Groq alcanzado. "+(seconds>0?"Vuelve a intentarlo en "+waitText(seconds)+".":"Prueba en unos minutos."));this.seconds=seconds;}
+    }
+    /** Lee de la respuesta de Groq cuánto hay que esperar («try again in 7m12.5s»). */
+    static int retrySeconds(String body){
+        if(body==null)return -1;
+        java.util.regex.Matcher m=Pattern.compile("try again in\\s+(?:(\\d+)h)?\\s*(?:(\\d+)m(?!s))?\\s*(?:([\\d.]+)s)?",Pattern.CASE_INSENSITIVE).matcher(body);
+        if(!m.find())return -1;
+        double s=0;
+        if(m.group(1)!=null)s+=Integer.parseInt(m.group(1))*3600;
+        if(m.group(2)!=null)s+=Integer.parseInt(m.group(2))*60;
+        if(m.group(3)!=null)s+=Double.parseDouble(m.group(3));
+        return s>0?(int)Math.ceil(s):-1;
+    }
+    public static String waitText(int s){
+        if(s<90)return s+" s";
+        if(s<5400)return Math.round(s/60f)+" min";
+        return String.format(java.util.Locale.ROOT,"%.1f h",s/3600f).replace(".0","");
+    }
     public GroqClient(Context c,String key){this(c,key,"");}
     public GroqClient(Context c,String key,String language){
         if(key==null||key.trim().isEmpty())throw new IllegalArgumentException("Falta la clave de IA. Ponla en Ajustes.");
@@ -143,7 +164,7 @@ public final class GroqClient {
         }
         int code=conn.getResponseCode();String resp=read(code<400?conn.getInputStream():conn.getErrorStream());conn.disconnect();
         if(code==401)throw new Exception("Clave de IA no válida. Revísala en Ajustes.");
-        if(code==429)throw new Exception("Límite gratuito de Groq alcanzado por ahora. Prueba en unos minutos.");
+        if(code==429)throw new RateLimit(retrySeconds(resp));
         if(code==413)throw new Exception("La grabación es demasiado grande para Groq.");
         if(code>=400)throw new Exception("Error al transcribir ("+code+"): "+brief(resp));
         return resp;
@@ -310,6 +331,7 @@ public final class GroqClient {
     // ------------------------------------------------------------------ Chat con elección de modelo
     private String chat(String system,String user,boolean json) throws Exception {
         String lastErr="sin modelos disponibles";
+        int rateTries=0;
         for(String model:candidateModels()){
             boolean extras=true;
             for(int round=0;round<2;round++){
@@ -332,7 +354,11 @@ public final class GroqClient {
                 }
                 lastErr=brief(r.body);String low=lastErr.toLowerCase(Locale.ROOT);
                 if(r.code==401)throw new Exception("Clave de IA no válida. Revísala en Ajustes.");
-                if(r.code==429)throw new Exception("Límite gratuito de Groq alcanzado por ahora. Prueba en unos minutos.");
+                if(r.code==429){
+                    int wait=retrySeconds(r.body);
+                    if(wait>=0&&wait<=20&&rateTries++<3){try{Thread.sleep((wait+1)*1000L);}catch(InterruptedException ie){throw new Exception("Cancelado");}round--;continue;}
+                    throw new RateLimit(wait);
+                }
                 if(r.code==400&&extras&&(low.contains("response_format")||low.contains("reasoning")||low.contains("json")||low.contains("not supported"))){extras=false;continue;}
                 break;
             }

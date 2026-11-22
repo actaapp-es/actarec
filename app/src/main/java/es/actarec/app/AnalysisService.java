@@ -50,31 +50,19 @@ public final class AnalysisService extends Service {
             String error=null;
             try{
                 RecordStore db=new RecordStore(this);
-                RecordStore.Recording record=db.get(id);
-                if(record==null)throw new IllegalStateException("La grabación ya no existe");
-                String key=SecureKey.get(this);
-                if(key.isEmpty())throw new IllegalStateException("Configura una clave de Groq en Ajustes");
-                GroqClient groq=new GroqClient(this,key,getSharedPreferences("prefs",MODE_PRIVATE).getString("language",""));
-                if(ACTION_ANALYZE.equals(action)){
-                    String transcript=record.transcript;
-                    if(transcript==null||transcript.trim().isEmpty()){
-                        update(id,"Transcribiendo audio con Groq…");
-                        transcript=groq.transcribe(new File(record.path),message->update(id,message));
-                        if(transcript.isEmpty())throw new IllegalStateException("Groq no ha reconocido voz en el archivo");
-                        db.setTranscript(id,transcript); // No perder la transcripción si el resumen falla
+                for(int attempt=0;;attempt++){
+                    try{
+                        runJob(db,id,action,question);
+                        break;
+                    }catch(GroqClient.RateLimit limit){
+                        // Espera lo que pide Groq (hasta 15 min) y vuelve a intentarlo; la transcripción ya hecha no se repite.
+                        if(attempt>=3||limit.seconds<=0||limit.seconds>900)throw limit;
+                        int total=limit.seconds+2;
+                        for(int left=total;left>0;left--){
+                            update(id,"Límite de Groq alcanzado. Reintento automático en "+GroqClient.waitText(left));
+                            Thread.sleep(1000);
+                        }
                     }
-                    update(id,"Preparando resumen y tareas…");
-                    String summary=groq.summarize(transcript,record.createdAt,record.durationMs,message->update(id,message));
-                    if(summary.isEmpty())throw new IllegalStateException("Groq no devolvió un resumen");
-                    db.setSummary(id,summary);
-                }else{
-                    String q=question==null?"":question.trim();
-                    if(q.isEmpty()||q.length()>1200)throw new IllegalArgumentException("Pregunta vacía o demasiado larga");
-                    if(!record.analyzed())throw new IllegalStateException("Primero transcribe la conversación");
-                    update(id,"Buscando la respuesta…");
-                    String answer=groq.ask(q,record.transcript,record.createdAt);
-                    if(answer.isEmpty())throw new IllegalStateException("Groq no devolvió una respuesta");
-                    db.message(id,"user",q);db.message(id,"assistant",answer);
                 }
                 db.setError(id,"");
             }catch(Exception e){
@@ -91,6 +79,34 @@ public final class AnalysisService extends Service {
             }
         });
         return START_NOT_STICKY;
+    }
+    private void runJob(RecordStore db,long id,String action,String question) throws Exception {
+        RecordStore.Recording record=db.get(id);
+        if(record==null)throw new IllegalStateException("La grabación ya no existe");
+        String key=SecureKey.get(this);
+        if(key.isEmpty())throw new IllegalStateException("Configura una clave de Groq en Ajustes");
+        GroqClient groq=new GroqClient(this,key,getSharedPreferences("prefs",MODE_PRIVATE).getString("language",""));
+        if(ACTION_ANALYZE.equals(action)){
+            String transcript=record.transcript;
+            if(transcript==null||transcript.trim().isEmpty()){
+                update(id,"Transcribiendo audio con Groq…");
+                transcript=groq.transcribe(new File(record.path),message->update(id,message));
+                if(transcript.isEmpty())throw new IllegalStateException("Groq no ha reconocido voz en el archivo");
+                db.setTranscript(id,transcript); // No perder la transcripción si el resumen falla
+            }
+            update(id,"Preparando resumen y tareas…");
+            String summary=groq.summarize(transcript,record.createdAt,record.durationMs,message->update(id,message));
+            if(summary.isEmpty())throw new IllegalStateException("Groq no devolvió un resumen");
+            db.setSummary(id,summary);
+        }else{
+            String q=question==null?"":question.trim();
+            if(q.isEmpty()||q.length()>1200)throw new IllegalArgumentException("Pregunta vacía o demasiado larga");
+            if(!record.analyzed())throw new IllegalStateException("Primero transcribe la conversación");
+            update(id,"Buscando la respuesta…");
+            String answer=groq.ask(q,record.transcript,record.createdAt);
+            if(answer.isEmpty())throw new IllegalStateException("Groq no devolvió una respuesta");
+            db.message(id,"user",q);db.message(id,"assistant",answer);
+        }
     }
     private Notification notification(long id,String state){
         Intent screen=new Intent(this,DetailActivity.class).putExtra("id",id);
