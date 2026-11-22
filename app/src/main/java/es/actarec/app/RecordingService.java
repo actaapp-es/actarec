@@ -116,21 +116,28 @@ public final class RecordingService extends Service {
             emit("No se pudo iniciar la grabación: "+safe(e),-1);stopSelf();
         }
     }
-    /** Intenta varias configuraciones soportadas para evitar fallos por hardware. */
+    /** Voz mono con la máxima compresión posible; si el hardware no la admite, prueba la siguiente. */
     private void initializeRecorder(File target) throws Exception {
         Exception last=null;
-        // 16 kHz es suficiente para voz y tiene buena compatibilidad en Android.
-        // La opción sin frecuencia explícita deja que el fabricante elija.
-        for(int rate:new int[]{44100,16000,0}){
+        // {codificador, frecuencia, bits/s}. HE-AAC a 16 kbps ocupa unos 7 MB por hora;
+        // Whisper trabaja a 16 kHz, así que no se pierde precisión de transcripción.
+        final int[][] ladder={
+            {MediaRecorder.AudioEncoder.HE_AAC,16000,16000},
+            {MediaRecorder.AudioEncoder.HE_AAC,24000,16000},
+            {MediaRecorder.AudioEncoder.AAC,16000,24000},
+            {MediaRecorder.AudioEncoder.AAC,16000,32000},
+            {MediaRecorder.AudioEncoder.AAC,0,48000},
+        };
+        for(int[] c:ladder){
             cleanup();
             try{
                 recorder=Build.VERSION.SDK_INT>=31?new MediaRecorder(this):new MediaRecorder();
                 recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
                 recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-                recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+                recorder.setAudioEncoder(c[0]);
                 recorder.setAudioChannels(1);
-                if(rate>0)recorder.setAudioSamplingRate(rate);
-                recorder.setAudioEncodingBitRate(rate==16000?32000:64000);
+                if(c[1]>0)recorder.setAudioSamplingRate(c[1]);
+                recorder.setAudioEncodingBitRate(c[2]);
                 recorder.setOutputFile(target.getAbsolutePath());
                 recorder.prepare();recorder.start();
                 return;

@@ -32,7 +32,7 @@ No pegues estos valores en el chat, README, issues ni código.
 
 ## 3. Publica una release estable
 
-Revisa la compilación automática en `main`, completa [PRUEBAS.md](PRUEBAS.md) y crea una etiqueta anotada:
+Revisa que la compilación automática de `main` pasa y crea una etiqueta anotada:
 
 ```sh
 git tag -a v1.0.0 -m 'Actarec 1.0.0'
@@ -46,5 +46,5 @@ El workflow `Android · Actarec` exige los cuatro secretos y construye `:app:ass
 ## Identidades y actualizaciones
 
 - **Release estable:** `es.actarec.app` — utiliza la clave de producción y `versionCode` creciente.
-- **Preview:** `es.actarec.app.preview` — firma debug separada; no migra datos automáticamente a la estable.
+- **Compilaciones de desarrollo:** `es.actarec.app.preview`, con firma debug; se generan en cada cambio de `main` solo como artefacto de Actions y no se publican.
 - Si los usuarios instalaron una versión anterior de `es.actarec.app` firmada con otra clave, puede ser necesario desinstalarla. Antes, deben **exportar sus grabaciones**; desinstalar borra los datos privados de la aplicación.

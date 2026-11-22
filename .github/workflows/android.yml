@@ -1,4 +1,4 @@
-name: Android · Compilar y publicar Actarec APK
+name: Compilar y publicar Actarec
 
 on:
   push:
@@ -75,9 +75,9 @@ jobs:
             code=$((100000001 + 10#$major * 1000000 + 10#$minor * 1000 + 10#$patch))
             basename="Actarec-v${name}"
           else
-            name="0.3.0-preview.${GITHUB_RUN_NUMBER}"
+            name="1.0.0-dev.${GITHUB_RUN_NUMBER}"
             code=$((1000 + GITHUB_RUN_NUMBER))
-            basename="Actarec-preview"
+            basename="Actarec-dev"
           fi
           signed=false
           if [[ -n "${KEYSTORE_BASE64:-}" && -n "${SIGN_STORE_PASSWORD:-}" && -n "${SIGN_KEY_ALIAS:-}" && -n "${SIGN_KEY_PASSWORD:-}" ]]; then
@@ -91,6 +91,7 @@ jobs:
             gradle --no-daemon --stacktrace :app:assembleRelease \
               -PactarecVersionName="$name" -PactarecVersionCode="$code"
             from="app/build/outputs/apk/release/app-release.apk"
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$from" | head -5
             signed=true
           else
             gradle --no-daemon --stacktrace :app:assembleDebug \
@@ -111,8 +112,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publicar APK pública en GitHub Releases
-        if: github.event_name != 'pull_request'
+      - name: Publicar versión definitiva en GitHub Releases
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -121,22 +122,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd dist && sha256sum -c SHA256SUMS.txt)
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            tag="$GITHUB_REF_NAME"
-            if [[ "$APK_SIGNED" == true ]]; then
-              printf 'APK firmada de Actarec %s. Android 10+. Comprueba el SHA-256 antes de instalar.\n' "$tag" > notes.txt
-              gh release create "$tag" "dist/$APK_FILENAME" dist/SHA256SUMS.txt --verify-tag --title "Actarec $tag" --notes-file notes.txt
-            else
-              printf 'APK EXPERIMENTAL de Actarec %s, firmada con clave debug efímera. No garantiza actualizaciones sin desinstalar. Configure los cuatro secretos ACTAREC_* para publicar una versión estable.\n' "$tag" > notes.txt
-              gh release create "$tag" "dist/$APK_FILENAME" dist/SHA256SUMS.txt --verify-tag --prerelease --title "Actarec $tag (experimental)" --notes-file notes.txt
-            fi
-          else
-            printf 'Vista previa automática. APK de %s. Firma estable: %s. Instalar solo con consentimiento para grabar.\n' "$GITHUB_SHA" "$APK_SIGNED" > notes.txt
-            if gh release view preview >/dev/null 2>&1; then
-              gh release upload preview "dist/$APK_FILENAME" dist/SHA256SUMS.txt --clobber
-              gh release edit preview --prerelease --title 'Actarec · Vista previa' --notes-file notes.txt
-            else
-              gh release create preview "dist/$APK_FILENAME" dist/SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease --title 'Actarec · Vista previa' --notes-file notes.txt
-            fi
+          if [[ "$APK_SIGNED" != true ]]; then
+            echo 'Faltan los secretos ACTAREC_* : una versión definitiva debe ir firmada.' >&2
+            exit 1
           fi
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+          # Copia con nombre fijo para que el enlace /releases/latest/download/Actarec.apk funcione siempre.
+          cp "dist/$APK_FILENAME" dist/Actarec.apk
+          (cd dist && sha256sum "$APK_FILENAME" Actarec.apk > SHA256SUMS.txt)
+          tag="$GITHUB_REF_NAME"
+          printf 'Actarec %s para Android 10 o superior. APK firmada: comprueba el SHA-256 antes de instalar.\n' "$tag" > notes.txt
+          gh release create "$tag" "dist/$APK_FILENAME" dist/Actarec.apk dist/SHA256SUMS.txt --verify-tag --latest --title "Actarec $tag" --notes-file notes.txt
