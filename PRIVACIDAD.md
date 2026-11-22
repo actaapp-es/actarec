@@ -19,7 +19,6 @@ La opción «Comprobar conexión» solo consulta el listado de modelos de Groq; 
 - **Micrófono:** grabación ambiental al pulsar el botón de inicio.
 - **Servicio en primer plano:** mantener la grabación y, cuando se autorice, el análisis visibles al cambiar de app.
 - **Notificaciones:** controles para pausar, reanudar y guardar desde Android.
-- **Superposición:** cápsula opcional bajo la barra superior del dispositivo, solo tras conceder permiso.
 - **Internet:** comunicación con Groq al analizar o comprobar una API key.
 - **Wake lock:** ayuda a evitar la suspensión del procesador mientras se graba.
 
