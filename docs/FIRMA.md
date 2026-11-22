@@ -34,10 +34,7 @@ No pegues estos valores en el chat, README, issues ni código.
 
 Revisa que la compilación automática de `main` pasa y crea una etiqueta anotada:
 
-```sh
-git tag -a v1.0.0 -m 'Actarec 1.0.0'
-git push origin v1.0.0
-```
+Cambia el número del archivo `VERSION` (por ejemplo `1.0.1`) y súbelo a `main`. Si esa versión aún no existe, el flujo compila, firma, verifica y publica la release `vX.Y.Z` con su etiqueta. También funciona subir una etiqueta `vX.Y.Z` directamente.
 
 El workflow `Android · Actarec` exige los cuatro secretos y construye `:app:assembleRelease`. Comprueba la APK con `apksigner`, calcula `SHA256SUMS.txt` y adjunta ambos archivos a GitHub Releases.
 

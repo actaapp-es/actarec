@@ -21,6 +21,24 @@ jobs:
       - name: Descargar código
         uses: actions/checkout@v4
 
+      - name: Decidir si hay versión nueva que publicar
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=""
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="$GITHUB_REF_NAME"
+          elif [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/heads/main && -f VERSION ]]; then
+            ver="$(tr -d '[:space:]' < VERSION)"
+            if [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && ! gh release view "v$ver" >/dev/null 2>&1; then
+              tag="v$ver"
+            fi
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Validar proyecto
         run: python3 scripts/check.py
 
@@ -59,6 +77,7 @@ jobs:
         id: apk
         shell: bash
         env:
+          RELEASE_TAG: ${{ steps.rel.outputs.tag }}
           KEYSTORE_BASE64: ${{ secrets.ACTAREC_KEYSTORE_BASE64 }}
           SIGN_STORE_PASSWORD: ${{ secrets.ACTAREC_STORE_PASSWORD }}
           SIGN_KEY_ALIAS: ${{ secrets.ACTAREC_KEY_ALIAS }}
@@ -66,7 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          if [[ "$GITHUB_REF" =~ ^refs/tags/v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+          if [[ "$RELEASE_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             major="${BASH_REMATCH[1]}"; minor="${BASH_REMATCH[2]}"; patch="${BASH_REMATCH[3]}"
             if (( 10#$major > 1900 || 10#$minor > 999 || 10#$patch > 999 )); then
               echo 'Tag fuera de rango (vM.m.p)' >&2; exit 1
@@ -113,12 +132,13 @@ jobs:
           retention-days: 30
 
       - name: Publicar versión definitiva en GitHub Releases
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.rel.outputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           APK_FILENAME: ${{ steps.apk.outputs.apk }}
           APK_SIGNED: ${{ steps.apk.outputs.signed }}
+          RELEASE_TAG: ${{ steps.rel.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
@@ -130,6 +150,6 @@ jobs:
           # Copia con nombre fijo para que el enlace /releases/latest/download/Actarec.apk funcione siempre.
           cp "dist/$APK_FILENAME" dist/Actarec.apk
           (cd dist && sha256sum "$APK_FILENAME" Actarec.apk > SHA256SUMS.txt)
-          tag="$GITHUB_REF_NAME"
+          tag="$RELEASE_TAG"
           printf 'Actarec %s para Android 10 o superior. APK firmada: comprueba el SHA-256 antes de instalar.\n' "$tag" > notes.txt
-          gh release create "$tag" "dist/$APK_FILENAME" dist/Actarec.apk dist/SHA256SUMS.txt --verify-tag --latest --title "Actarec $tag" --notes-file notes.txt
+          gh release create "$tag" "dist/$APK_FILENAME" dist/Actarec.apk dist/SHA256SUMS.txt --target "$GITHUB_SHA" --latest --title "Actarec $tag" --notes-file notes.txt
