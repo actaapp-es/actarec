@@ -108,12 +108,13 @@ public final class GroqClient {
             if(q.isEmpty()||q.replaceAll("[\\p{Punct}\\s]","").isEmpty()||q.equalsIgnoreCase(prev))continue;
             prev=q;clean.add(new Seg(sg.t,sg.e,q));
         }
-        StringBuilder out=new StringBuilder();double lastEnd=-1;
-        for(Seg sg:clean){
-            if(out.length()>0)out.append(lastEnd>=0&&sg.t>=0&&sg.t-lastEnd>2.5?"\n\n":" ");
-            out.append(sg.s);lastEnd=sg.e>sg.t?sg.e:sg.t;
-        }
-        return cleanTranscript(out.toString());
+        List<Paragraphs.Piece> pieces=new ArrayList<>();
+        for(Seg sg:clean)pieces.add(new Paragraphs.Piece(sg.t,sg.e,sg.s));
+        boolean timed=false;for(Seg sg:clean)if(sg.t>=0){timed=true;break;}
+        String joined=Paragraphs.fromPieces(pieces);
+        // Si Groq no dio tiempos, se reparte por frases.
+        if(!timed)joined=Paragraphs.fromText(joined.replace("\n\n"," "));
+        return cleanTranscript(joined);
     }
     private static double durationOf(File f){
         try{
@@ -185,14 +186,20 @@ public final class GroqClient {
             +"|gracias por ver( el v[ií]deo)?|¡?suscr[ií]bete( al canal)?!?|[\\[(]m[uú]sica[\\])]|amara\\.org)");
     private static String cleanTranscript(String t){
         if(t==null)return "";
-        String s=HALLUCINATIONS.matcher(t).replaceAll(" ");
-        String[] parts=s.split("(?<=[.!?…])\\s+");StringBuilder sb=new StringBuilder();String prev=null;
-        for(String p:parts){
-            String q=p.trim();if(q.isEmpty())continue;
-            if(q.equalsIgnoreCase(prev))continue;
-            sb.append(q).append(' ');prev=q;
+        StringBuilder res=new StringBuilder();String prev=null;
+        for(String para:t.split("\\n\\s*\\n")){
+            String s=HALLUCINATIONS.matcher(para).replaceAll(" ");
+            String[] parts=s.split("(?<=[.!?…])\\s+");StringBuilder sb=new StringBuilder();
+            for(String p:parts){
+                String q=p.trim();if(q.isEmpty())continue;
+                if(q.equalsIgnoreCase(prev))continue;
+                sb.append(q).append(' ');prev=q;
+            }
+            String clean=sb.toString().replaceAll("(^|\\s)[.,;:]+(?=\\s|$)"," ").replaceAll("\\s+"," ").trim();
+            if(clean.isEmpty())continue;
+            if(res.length()>0)res.append("\n\n");res.append(clean);
         }
-        return sb.toString().replaceAll("(^|\\s)[.,;:]+(?=\\s|$)"," ").replaceAll("[ \\t]+"," ").replaceAll(" ?\\n ?","\n").trim();
+        return res.toString().trim();
     }
     private static int wordCount(String s){return s==null||s.trim().isEmpty()?0:s.trim().split("\\s+").length;}
 
@@ -262,9 +269,9 @@ public final class GroqClient {
             for(int i=0;i<sections.size();i++){
                 progress.update("Resumiendo bloque "+(i+1)+" de "+sections.size());
                 notes.append("\nBLOQUE ").append(i+1).append(":\n");
-                notes.append(chat("Extrae de esta parte de una grabación solo hechos, decisiones, cifras, nombres, fechas y tareas explícitas, en español. No inventes datos.",sections.get(i),false)).append("\n");
+                notes.append(chat("Esta es una parte, en orden, de una grabación larga. Extrae en español, en viñetas y respetando el orden: temas tratados, quién dice o propone qué (si se sabe), decisiones y acuerdos, cifras, nombres, fechas, y tareas o compromisos explícitos. Anota si alguien cambia de opinión. No inventes datos ni resumas de forma vaga.",sections.get(i),false)).append("\n");
             }
-            text="(Notas parciales de una grabación larga, en orden)\n"+notes;
+            text="(Notas parciales de una grabación larga, en orden cronológico; analiza el conjunto como una sola grabación)\n"+notes;
             if(text.length()>60000)text=text.substring(0,60000);
         }
         progress.update("Preparando el resumen…");
@@ -275,31 +282,51 @@ public final class GroqClient {
     }
     private static String systemPrompt(){
         return "Eres el asistente de Actarec, una app que graba conversaciones con el micrófono del móvil (reuniones, charlas, "
-            +"notas de voz). Recibes la transcripción automática de UNA grabación. Puede haber una o varias personas y la "
-            +"transcripción no indica quién habla: dedúcelo con cuidado por el contenido. Puede tener errores de reconocimiento. "
-            +"Analízala con rigor y responde SOLO con un objeto JSON válido, en español, con exactamente esta forma:\n"
-            +"{\"contexto\": \"...\", \"resumen\": \"...\", \"nota\": \"...\", \"tareas\": [{\"titulo\": \"...\", "
-            +"\"detalle\": \"...\", \"responsable\": \"...\", \"fecha\": \"AAAA-MM-DD\" o null, \"hora\": \"HH:MM\" o null}]}\n\n"
-            +"Reglas:\n"
+            +"llamadas, clases, notas de voz). Recibes la transcripción automática de UNA grabación, ya dividida en párrafos "
+            +"(cada párrafo suele corresponder a una pausa o a un cambio de idea). No indica quién habla y puede tener errores "
+            +"de reconocimiento.\n\n"
+            +"MÉTODO (hazlo mentalmente antes de responder):\n"
+            +"1) Lee TODA la transcripción de principio a fin antes de resumir. Lo importante suele estar al final.\n"
+            +"2) Averigua el tipo de conversación (reunión de trabajo, llamada, clase, entrevista, nota personal…), cuántas "
+            +"personas hablan, cómo se llaman (si se nombran o se saludan) y qué papel tiene cada una. Si hay varias voces, "
+            +"sigue la alternancia de preguntas y respuestas: nunca atribuyas a uno lo que dijo otro. Si no se puede saber "
+            +"quién dijo algo, no lo atribuyas.\n"
+            +"3) Separa los temas por orden de aparición. Distingue lo que se propone o se duda de lo que realmente se decide "
+            +"o se acuerda. Si alguien se corrige más tarde, vale lo último que dice.\n"
+            +"4) Respeta cifras, nombres, fechas, importes y referencias tal como aparecen; corrige en silencio solo errores "
+            +"evidentes de reconocimiento (nombres mal escritos, palabras sin sentido).\n\n"
+            +"Responde SOLO con un objeto JSON válido, en español, con exactamente esta forma:\n"
+            +"{\"titulo\": \"...\", \"contexto\": \"...\", \"resumen\": \"...\", "
+            +"\"temas\": [{\"titulo\": \"...\", \"puntos\": [\"...\"]}], \"decisiones\": [\"...\"], \"nota\": \"...\", "
+            +"\"tareas\": [{\"titulo\": \"...\", \"detalle\": \"...\", \"responsable\": \"...\", "
+            +"\"fecha\": \"AAAA-MM-DD\" o null, \"hora\": \"HH:MM\" o null}]}\n\n"
+            +"Reglas de cada campo:\n"
             +"- Escribe SIEMPRE desde el punto de vista de quien grabó: refiérete a esa persona como «tú» y a los demás por su "
-            +"nombre si se dice, o como «los participantes». Nunca confundas lo que dijo uno con lo que dijo otro.\n"
-            +"- contexto: 1 o 2 frases. De qué tipo de conversación se trata, quién parece participar y el motivo o la situación.\n"
-            +"- resumen: breve, de 2 a 4 frases. Lo esencial: qué se habló, qué se decidió o acordó y en qué quedó. Sin relleno ni "
-            +"frases genéricas como «se trataron varios temas».\n"
-            +"- nota: UNA frase muy breve (máximo 90 caracteres), dirigida a quien grabó, que le recuerde lo más importante. "
-            +"Empieza en minúscula salvo nombres propios. Si no hay nada relevante, \"\".\n"
-            +"- tareas: solo acciones concretas que alguien pide, ordena, encarga o se compromete a hacer (llamar, enviar, pagar, "
-            +"revisar, preparar, reunirse, recoger, confirmar…). No inventes tareas: si no hay ninguna, devuelve [].\n"
+            +"nombre si se dice, o como «los participantes».\n"
+            +"- titulo: de 3 a 8 palabras que digan de qué va la grabación (p. ej. «Revisión del presupuesto de la reforma»). "
+            +"Sin comillas ni punto final.\n"
+            +"- contexto: 1 o 2 frases: tipo de conversación, quién participa y el motivo o la situación.\n"
+            +"- resumen: proporcional a la duración. Grabación corta (menos de 5 min): 2 a 4 frases. Media: 4 a 6 frases. "
+            +"Larga: hasta 8 frases. Cuenta qué se habló, qué se decidió o acordó y en qué quedó, con las cifras y nombres "
+            +"que importan. Sin relleno ni frases como «se trataron varios temas».\n"
+            +"- temas: de 2 a 6 temas, en el orden en que se tratan. Cada uno con un titulo corto (2 a 6 palabras) y de 1 a 3 "
+            +"puntos concretos (una frase breve cada uno: qué se dijo, cifra, postura o conclusión). Si la grabación trata de "
+            +"una sola cosa, usa 2 o 3 temas que la desglosen por fases o aspectos. Si no hay conversación entendible, [].\n"
+            +"- decisiones: acuerdos, conclusiones o resoluciones firmes (frases cortas). Si no hubo ninguna, [].\n"
+            +"- nota: UNA frase muy breve (máximo 90 caracteres), dirigida a quien grabó, con lo más importante que debe "
+            +"recordar. Empieza en minúscula salvo nombres propios. Si no hay nada relevante, \"\".\n"
+            +"- tareas: solo acciones concretas que alguien pide, ordena, encarga o se compromete a hacer. No inventes: si no "
+            +"hay ninguna, [].\n"
             +"  · titulo: corto, empieza por un verbo en infinitivo (p. ej. «Enviar el presupuesto a Juan»).\n"
             +"  · detalle: lo necesario para hacerla: qué, a quién, dónde, importes, referencias. Puede ser \"\".\n"
             +"  · responsable: «Tú» si la tiene que hacer quien grabó; el nombre de la persona si la hace otra; «Ambos» si es "
             +"compartida; «Sin determinar» si no queda claro.\n"
-            +"  · fecha y hora: convierte expresiones como «mañana», «el viernes», «a las cinco» usando la fecha y hora de la "
-            +"grabación que se te dan. Si no se dice cuándo, pon null. No supongas fechas que no se mencionan.\n"
+            +"  · fecha y hora: convierte «mañana», «el viernes», «a las cinco» usando la fecha y hora de la grabación que se te "
+            +"dan. Si no se dice cuándo, null. No supongas fechas que no se mencionan.\n"
             +"- Sé fiel a la transcripción: no inventes nombres, cifras ni datos. Si algo es dudoso, dilo con prudencia "
-            +"(«parece que…»). Corrige en silencio errores evidentes de reconocimiento.\n"
+            +"(«parece que…»).\n"
             +"- Si no hay una conversación entendible, pon en contexto «No se distingue una conversación clara en la "
-            +"grabación.», resumen \"\", nota \"\" y tareas [].";
+            +"grabación.», titulo \"\", resumen \"\", temas [], decisiones [], nota \"\" y tareas [].";
     }
     private static String userPrompt(String transcript,long createdAt,long durationMs){
         SimpleDateFormat f=new SimpleDateFormat("EEEE d 'de' MMMM 'de' yyyy (yyyy-MM-dd) 'a las' HH:mm",new Locale("es","ES"));

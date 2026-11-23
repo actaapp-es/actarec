@@ -229,7 +229,7 @@ public final class DetailActivity extends Activity {
         if(r.summary.isEmpty()){
             LinearLayout card=padded();
             card.addView(Ui.text(this,R.style.Text_Body,"Resumen y tareas con IA"));
-            TextView m=Ui.text(this,R.style.Text_Meta,"Groq transcribe el audio y deja por escrito el contexto, un resumen breve y las tareas con responsable y fecha. Usa tu propia clave.");
+            TextView m=Ui.text(this,R.style.Text_Meta,"Groq transcribe el audio en párrafos y deja por escrito el contexto, el resumen, los temas, un diagrama y las tareas con responsable y fecha. Usa tu propia clave.");
             m.setLineSpacing(Ui.dp(this,2),1);card.addView(m,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,6));
             TextView analyze=Ui.button(this,r.analyzed()?"Crear resumen":"Transcribir y resumir",true);
             analyze.setEnabled(!processing());analyze.setAlpha(processing()?.5f:1f);analyze.setOnClickListener(v->confirmAnalysis(r));
@@ -240,8 +240,22 @@ public final class DetailActivity extends Activity {
             LinearLayout card=padded();card.addView(body(r.summary));root.addView(card,side(14));
         }else{
             LinearLayout card=padded();
+            if(!a.title.isEmpty()){TextView tt=Ui.text(this,R.style.Text,a.title,20,true);card.addView(tt,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,0));}
             cardBlock(card,"Contexto",a.context);cardBlock(card,"Resumen",a.summary);
             root.addView(card,side(14));
+            if(a.hasDiagram()){
+                root.addView(Ui.section(this,"Diagrama de la grabación"));
+                LinearLayout dc=padded();
+                TextView hint=Ui.text(this,R.style.Text_Meta,"Los temas, en el orden en que se hablaron, con lo que se decidió y lo que queda por hacer.");
+                hint.setLineSpacing(Ui.dp(this,2),1);dc.addView(hint);
+                java.text.SimpleDateFormat df=new java.text.SimpleDateFormat("d MMM yyyy, HH:mm",new java.util.Locale("es","ES"));
+                String meta=df.format(new java.util.Date(r.createdAt))+" · "+Ui.mmss(r.durationMs);
+                dc.addView(new DiagramView(this,a,meta),Ui.lpTop(this,Ui.MATCH,Ui.WRAP,14));
+                root.addView(dc,side(0));
+            }else if(!a.summary.isEmpty()){
+                TextView old=Ui.text(this,R.style.Text_Meta,"Este resumen es de una versión anterior. Pulsa «Volver a resumir» para añadir temas, decisiones y el diagrama.");
+                old.setLineSpacing(Ui.dp(this,2),1);root.addView(old,Ui.lpMargins(this,20,10,20,0));
+            }
             if(!a.tasks.isEmpty()){
                 root.addView(Ui.section(this,"Tareas · "+a.tasks.size()));
                 LinearLayout group=Ui.vertical(this);group.setBackgroundResource(R.drawable.bg_card);group.setClipToOutline(true);
@@ -282,9 +296,12 @@ public final class DetailActivity extends Activity {
             TextView analyze=Ui.button(this,"Transcribir con Groq",true);analyze.setEnabled(!processing());analyze.setOnClickListener(v->confirmAnalysis(r));
             panel.addView(analyze,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,16));root.addView(panel,side(14));
         }else{
-            panel.addView(body(r.transcript));root.addView(panel,side(14));
+            String shown=Paragraphs.fromText(r.transcript);
+            LinearLayout paras=Ui.vertical(this);
+            for(String para:shown.split("\\n\\s*\\n")){if(para.trim().isEmpty())continue;paras.addView(body(para.trim()),Ui.lpTop(this,Ui.MATCH,Ui.WRAP,paras.getChildCount()==0?0:14));}
+            panel.addView(paras);root.addView(panel,side(14));
             LinearLayout actions=Ui.horizontal(this);actions.setPadding(Ui.dp(this,16),0,Ui.dp(this,16),0);
-            TextView copy=Ui.button(this,"Copiar",false);copy.setOnClickListener(v->copy(r.transcript));
+            TextView copy=Ui.button(this,"Copiar",false);copy.setOnClickListener(v->copy(Paragraphs.fromText(r.transcript)));
             actions.addView(copy,new LinearLayout.LayoutParams(0,Ui.WRAP,1));
             TextView edit=Ui.button(this,"Editar texto",false);edit.setEnabled(!processing());edit.setOnClickListener(v->editTranscript(r));
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,Ui.WRAP,1);p.setMarginStart(Ui.dp(this,10));actions.addView(edit,p);
@@ -382,7 +399,7 @@ public final class DetailActivity extends Activity {
                 case 1:rename(r);break;
                 case 2:shareAudio();break;
                 case 3:shareText("Resumen de Actarec",Analysis.toText(r.summary));break;
-                case 4:shareText("Transcripción de Actarec",r.transcript);break;
+                case 4:shareText("Transcripción de Actarec",Paragraphs.fromText(r.transcript));break;
                 case 5:delete();break;
             }
         }).show();

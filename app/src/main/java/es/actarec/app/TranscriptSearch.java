@@ -44,8 +44,9 @@ public final class TranscriptSearch {
         while(p<text.length()){
             int end=Math.min(text.length(),p+max);
             if(end<text.length()){
+                int para=text.lastIndexOf("\n\n",end);
                 int space=text.lastIndexOf(' ',end);
-                if(space>p+max/2)end=space;
+                if(para>p+max/2)end=para;else if(space>p+max/2)end=space;
             }
             if(end<=p)end=Math.min(text.length(),p+max);
             sections.add(text.substring(p,end));p=end;
