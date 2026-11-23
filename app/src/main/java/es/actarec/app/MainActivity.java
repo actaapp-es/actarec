@@ -102,7 +102,7 @@ public final class MainActivity extends Activity {
     @Override protected void onStop(){if(subscribed){unregisterReceiver(updates);subscribed=false;}
         handler.removeCallbacks(clock);super.onStop();
     }
-    @Override protected void onResume(){super.onResume();Ui.recreateIfThemeChanged(this,seenTheme);if(!crashShown)safeRender();}
+    @Override protected void onResume(){super.onResume();Ui.recreateIfThemeChanged(this,seenTheme);if(!crashShown)safeRender();if(Calls.notifyEnabled(this))MissedCallJob.schedule(this);}
     private void detectNotch(){
         if(Build.VERSION.SDK_INT<28)return;
         WindowInsets inset=getWindow().getDecorView().getRootWindowInsets();
@@ -119,7 +119,7 @@ public final class MainActivity extends Activity {
         ImageView settings=Ui.iconButton(this,R.drawable.ic_settings,R.color.ink_2,"Abrir ajustes");
         settings.setOnClickListener(v->startActivity(new Intent(this,SettingsActivity.class)));
         toolbar.addView(settings);page.addView(toolbar);
-        drawRecorder();drawLibrary();
+        drawRecorder();drawCalls();drawLibrary();
     }
     private LinearLayout.LayoutParams side(int top){
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(Ui.MATCH,Ui.WRAP);
@@ -161,6 +161,65 @@ public final class MainActivity extends Activity {
                 :"El audio se queda en tu móvil. Tú decides si enviarlo a Groq.");
         note.setTextSize(12.5f);card.addView(note,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,12));
         page.addView(card,side(18));
+    }
+    private void drawCalls(){
+        java.util.List<Calls.Missed> missed=Calls.missed(this);
+        java.util.List<Calls.Sched> sched=Calls.scheduled(this);
+        if(!Calls.canReadLog(this)){
+            if(Ui.prefs(this).getBoolean("calls_prompt_hidden",false)&&sched.isEmpty())return;
+            page.addView(Ui.section(this,"Llamadas"));
+            LinearLayout card=Ui.card(this);card.setPadding(Ui.dp(this,18),Ui.dp(this,16),Ui.dp(this,18),Ui.dp(this,12));
+            card.addView(Ui.text(this,R.style.Text_Body,"Controla tus llamadas perdidas",16,true));
+            TextView d=Ui.text(this,R.style.Text_Meta,"Actarec puede avisarte de las llamadas que no has devuelto y dejarte programar un aviso para llamar más tarde. Solo lee el registro de llamadas en tu móvil; nada sale de él.");
+            d.setLineSpacing(Ui.dp(this,2),1);card.addView(d,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,6));
+            LinearLayout row=Ui.horizontal(this);row.setGravity(Gravity.END);
+            TextView no=Ui.textButton(this,"Ahora no");no.setOnClickListener(v->{Ui.prefs(this).edit().putBoolean("calls_prompt_hidden",true).apply();safeRender();});
+            TextView yes=Ui.textButton(this,"Activar");yes.setOnClickListener(v->requestPermissions(new String[]{android.Manifest.permission.READ_CALL_LOG},Calls.REQ_LOG));
+            row.addView(no);row.addView(yes);card.addView(row,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,8));
+            page.addView(card,side(0));
+        }
+        if(missed.isEmpty()&&sched.isEmpty())return;
+        if(Calls.canReadLog(this))page.addView(Ui.section(this,"Llamadas"));
+        else if(!sched.isEmpty()&&Ui.prefs(this).getBoolean("calls_prompt_hidden",false))page.addView(Ui.section(this,"Llamadas"));
+        LinearLayout group=Ui.card(this);group.setPadding(0,0,0,0);
+        boolean first=true;int shown=0;
+        for(Calls.Missed m:missed){
+            if(shown++>=4)break;
+            if(!first)group.addView(Ui.separator(this,18));first=false;
+            String who=m.name!=null&&!m.name.isEmpty()?m.name:Calls.pretty(m.number);
+            group.addView(callRow(R.drawable.ic_more,who,(m.count>1?m.count+" perdidas":"Perdida")+" · "+Calls.ago(m.last),"Perdida: "+who,m.number,true));
+        }
+        for(Calls.Sched sc:sched){
+            if(!first)group.addView(Ui.separator(this,18));first=false;
+            group.addView(callRow(R.drawable.ic_more,Calls.pretty(sc.number),"Programada · "+Calls.label(sc.at),"Programada",sc.number,false,sc.id));
+        }
+        page.addView(group,side(0));
+    }
+    private View callRow(int icon,String title,String meta,String desc,String number,boolean isMissed,String... id){
+        LinearLayout box=Ui.horizontal(this);box.setGravity(Gravity.CENTER_VERTICAL);
+        box.setPadding(Ui.dp(this,18),Ui.dp(this,10),Ui.dp(this,6),Ui.dp(this,10));
+        box.setBackgroundResource(R.drawable.bg_card_click);box.setMinimumHeight(Ui.dp(this,60));
+        LinearLayout col=Ui.vertical(this);
+        TextView t=Ui.text(this,R.style.Text_Body,title,15.5f,true);if(isMissed)t.setTextColor(getColor(R.color.ink));col.addView(t);
+        TextView m=Ui.text(this,R.style.Text_Meta,meta);m.setTextSize(13);col.addView(m,Ui.lpTop(this,Ui.WRAP,Ui.WRAP,2));
+        box.addView(col,new LinearLayout.LayoutParams(0,Ui.WRAP,1));
+        ImageView more=Ui.iconButton(this,icon,R.color.ink_2,"Más opciones");
+        box.addView(more);
+        View.OnClickListener menu=v->callMenu(number,isMissed,id.length>0?id[0]:null);
+        more.setOnClickListener(menu);box.setOnLongClickListener(v->{menu.onClick(v);return true;});
+        box.setOnClickListener(v->{try{startActivity(new Intent(Intent.ACTION_DIAL,android.net.Uri.fromParts("tel",number,null)));}catch(Exception e){Toast.makeText(this,"No se pudo abrir el marcador",Toast.LENGTH_SHORT).show();}});
+        box.setContentDescription(desc+". Toca para llamar; mantén pulsado para más opciones.");
+        return box;
+    }
+    private void callMenu(String number,boolean isMissed,String schedId){
+        String[] items=isMissed?new String[]{"Llamar","Programar una llamada","Descartar"}:new String[]{"Llamar ahora","Cambiar la hora","Cancelar el aviso"};
+        new AlertDialog.Builder(this).setTitle(Calls.pretty(number)).setItems(items,(d,w)->{
+            if(w==0){try{startActivity(new Intent(Intent.ACTION_DIAL,android.net.Uri.fromParts("tel",number,null)));}catch(Exception e){}}
+            else if(isMissed&&w==1)Calls.showScheduleDialog(this,number,this::safeRender);
+            else if(isMissed&&w==2){Calls.dismiss(this,number);safeRender();}
+            else if(w==1){final String sid=schedId;Calls.showScheduleDialog(this,number,()->{Calls.cancel(this,sid);safeRender();});}
+            else{Calls.cancel(this,schedId);safeRender();}
+        }).show();
     }
     private void drawLibrary(){
         LinearLayout top=Ui.horizontal(this);top.setPadding(Ui.dp(this,26),Ui.dp(this,22),Ui.dp(this,14),0);
@@ -277,6 +336,14 @@ public final class MainActivity extends Activity {
         if(code==REQ_AUDIO){
             if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)startFlow();
             else Toast.makeText(this,"Concede acceso al micrófono para grabar",Toast.LENGTH_LONG).show();
+        }else if(code==Calls.REQ_LOG){
+            if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED){
+                Calls.markSeenNow(this);Calls.setNotify(this,true);
+                Toast.makeText(this,"Te avisaré de las llamadas perdidas",Toast.LENGTH_LONG).show();
+                if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},Calls.REQ_NOTI);
+            }
+            safeRender();
         }else if(code==REQ_NOTIFICATION){
             if(results.length==0||results[0]!=PackageManager.PERMISSION_GRANTED)
                 Toast.makeText(this,"Activa las notificaciones para ver los controles fuera de la app",Toast.LENGTH_LONG).show();

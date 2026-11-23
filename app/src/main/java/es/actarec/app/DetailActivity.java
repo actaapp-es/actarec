@@ -218,7 +218,7 @@ public final class DetailActivity extends Activity {
         }
         root.addView(tabs,Ui.lpTop(this,Ui.MATCH,Ui.WRAP,18));
     }
-    private TextView body(String s){TextView t=Ui.text(this,R.style.Text,s);t.setTextSize(15.5f);t.setLineSpacing(Ui.dp(this,3),1);t.setTextIsSelectable(true);return t;}
+    private TextView body(String s){TextView t=Ui.text(this,R.style.Text,s);t.setTextSize(15.5f);t.setLineSpacing(Ui.dp(this,3),1);t.setTextIsSelectable(true);PhoneLinks.attach(t);return t;}
     private void cardBlock(LinearLayout card,String label,String text){
         if(text==null||text.isEmpty())return;
         TextView l=Ui.label(this,label);card.addView(l,Ui.lpTop(this,Ui.WRAP,Ui.WRAP,card.getChildCount()==0?0:18));
@@ -309,7 +309,7 @@ public final class DetailActivity extends Activity {
         }
     }
     private EditText field(String hint){
-        EditText e=new EditText(this);e.setHint(hint);e.setTextSize(15.5f);e.setTextColor(getColor(R.color.ink));e.setHintTextColor(getColor(R.color.ink_2));
+        EditText e=new EditText(this);PhoneLinks.attach(e);e.setHint(hint);e.setTextSize(15.5f);e.setTextColor(getColor(R.color.ink));e.setHintTextColor(getColor(R.color.ink_2));
         e.setBackgroundResource(R.drawable.bg_field);e.setPadding(Ui.dp(this,18),Ui.dp(this,14),Ui.dp(this,18),Ui.dp(this,14));return e;
     }
     private void chatTab(LinearLayout root,RecordStore.Recording r){

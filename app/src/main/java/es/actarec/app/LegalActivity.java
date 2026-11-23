@@ -44,6 +44,8 @@ public final class LegalActivity extends Activity {
          "En el almacenamiento privado de la aplicación, al que no acceden otras apps. La clave de Groq se guarda cifrada con el Android Keystore."},
         {"Cuándo salen del móvil",
          "Solo cuando pulsas transcribir, resumir o preguntar y has configurado tu clave de Groq: entonces se envía a Groq el audio o la transcripción de esa grabación. Actarec no envía tu número de teléfono, ni datos de identificación, ni analítica."},
+        {"Llamadas perdidas y llamadas programadas",
+         "Si lo activas, Actarec lee el registro de llamadas de tu móvil (permiso de Android que puedes retirar cuando quieras) para avisarte de las llamadas que no has devuelto. Esa información no se guarda ni sale del teléfono. Las llamadas que programas se guardan solo en el móvil, y Actarec no hace llamadas por sí misma: el aviso abre el marcador de Android."},
         {"Qué no hace Actarec",
          "No pide cuentas ni correo, no muestra anuncios, no usa analítica ni cookies y no tiene servidores propios donde subir tus audios."},
         {"Tus derechos",

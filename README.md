@@ -9,7 +9,7 @@
 - Grabación en segundo plano con pausa, reanudación y guardado desde la notificación.
 - Compresión máxima para voz: HE-AAC mono a 16 kbps, unos 7 MB por hora.
 - Marcadores durante la grabación y al escuchar; toca uno para saltar a ese momento.
-- Transcripción con Whisper (Groq) ordenada en párrafos; resumen con contexto, temas, decisiones y tareas; diagrama de la grabación; y preguntas sobre cada grabación.
+- Transcripción con Whisper (Groq) ordenada en párrafos; resumen con contexto, temas, decisiones y tareas; diagrama de la grabación; y preguntas sobre cada grabación. Avisa de las llamadas perdidas y permite programar una llamada manteniendo pulsado un número.
 - Búsqueda, favoritos, importación de audios, compartir y borrado local.
 - Grabaciones en el almacenamiento privado del móvil. La clave de Groq es tuya y se guarda cifrada con Android Keystore.
 - Sin cuentas, anuncios, analítica ni servidores propios. El audio solo se envía a Groq cuando tú lo autorizas.

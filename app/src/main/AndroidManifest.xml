@@ -9,6 +9,8 @@
     <!-- Android 16: solicitud opcional de actualizaciones en vivo en la barra de estado. -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
 
     <application
@@ -29,6 +31,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".ScheduleCallActivity" android:exported="false" android:theme="@style/Theme.Actarec.Sheet" android:excludeFromRecents="true" android:taskAffinity="" />
+        <receiver android:name=".CallReminderReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <service android:name=".MissedCallJob" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
         <provider android:name=".AudioProvider" android:authorities="${applicationId}.audio" android:exported="false" android:grantUriPermissions="true" />
         <service android:name=".AnalysisService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service

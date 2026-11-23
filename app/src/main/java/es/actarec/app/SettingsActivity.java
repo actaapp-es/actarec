@@ -54,6 +54,15 @@ public final class SettingsActivity extends Activity {
         });
         root.addView(rec,side());
 
+        root.addView(Ui.section(this,"Llamadas"));
+        LinearLayout calls=group();
+        boolean on=Calls.notifyEnabled(this);
+        addRow(calls,"Avisar de llamadas perdidas","Lee el registro de llamadas del móvil y te avisa de las que no has devuelto, con botones para llamar o programar un aviso.",on?"Activado":"Desactivado",v->{
+            if(!Calls.canReadLog(this)){requestPermissions(new String[]{android.Manifest.permission.READ_CALL_LOG},Calls.REQ_LOG);return;}
+            Calls.setNotify(this,!Calls.notifyEnabled(this));if(Calls.notifyEnabled(this))Calls.markSeenNow(this);render();
+        });
+        root.addView(calls,side());
+
         root.addView(Ui.section(this,"Apariencia"));
         LinearLayout look=group();
         addRow(look,"Tema","",Ui.THEME_SHORT[Ui.theme(this)],v->themeDialog());
@@ -155,4 +164,10 @@ public final class SettingsActivity extends Activity {
         }).show();
     }
     private void toast(String message){Toast.makeText(this,message,Toast.LENGTH_LONG).show();}
+    @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){
+        super.onRequestPermissionsResult(code,permissions,results);
+        if(code==Calls.REQ_LOG&&results.length>0&&results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED){
+            Calls.markSeenNow(this);Calls.setNotify(this,true);render();
+        }
+    }
 }
